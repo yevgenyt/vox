@@ -93,14 +93,19 @@ class AudioRecorder:
         return np.concatenate(self.audio_chunks, axis=0)
 
 
-def process_audio(audio: np.ndarray, channels: int) -> np.ndarray:
+def process_audio(audio: np.ndarray, channels: int) -> tuple[np.ndarray, dict]:
     """
     Process audio for whisper.
 
     Pipeline: mono -> resample -> noise gate -> normalize -> gain
+
+    Returns:
+        Tuple of (processed_audio, stats_dict)
     """
+    stats = {"peak": 0.0, "snr_db": 0.0, "quality": "Empty"}
+
     if audio.size == 0:
-        return audio
+        return audio, stats
 
     # Convert to mono
     if channels > 1:
@@ -111,11 +116,53 @@ def process_audio(audio: np.ndarray, channels: int) -> np.ndarray:
     # Resample 48kHz -> 16kHz
     audio = resample_poly(audio, SAMPLE_RATE_WHISPER, SAMPLE_RATE_CAPTURE)
 
+    # Calculate stats before processing
+    peak = np.max(np.abs(audio))
+    stats["peak"] = peak
+
+    # Calculate SNR (signal-to-noise ratio)
+    # Method: compare 20th percentile (noise floor) vs 80th percentile (signal)
+    # This is more stable than mean-based approaches
+    frame_size = int(SAMPLE_RATE_WHISPER * 0.02)  # 20ms frames
+    n_frames = len(audio) // frame_size
+    if n_frames >= 10:
+        frame_rms = np.array([
+            np.sqrt(np.mean(audio[i * frame_size : (i + 1) * frame_size] ** 2))
+            for i in range(n_frames)
+        ])
+        # Use percentiles for stability
+        noise_floor = np.percentile(frame_rms, 20)  # 20th percentile = quiet parts
+        signal_level = np.percentile(frame_rms, 80)  # 80th percentile = loud parts
+
+        # Clamp noise floor to avoid division by zero or unrealistic values
+        noise_floor = max(noise_floor, 1e-6)
+
+        snr = signal_level / noise_floor
+        stats["snr_db"] = 20 * np.log10(snr)
+
+        # Also store raw levels for debugging
+        stats["noise_floor"] = noise_floor
+        stats["signal_level"] = signal_level
+
+    # Determine quality based on both peak and SNR
+    # SNR benchmarks: <10dB noisy, 10-20dB acceptable, >20dB good, >30dB excellent
+    if peak < 0.01:
+        stats["quality"] = "Silent"
+    elif peak < 0.05:
+        stats["quality"] = "Too quiet"
+    elif stats["snr_db"] < 10:
+        stats["quality"] = "Noisy"
+    elif stats["snr_db"] < 20:
+        stats["quality"] = "OK"
+    elif stats["snr_db"] < 30:
+        stats["quality"] = "Good"
+    else:
+        stats["quality"] = "Excellent"
+
     # Apply noise gate
     audio = apply_noise_gate(audio)
 
     # Normalize to peak
-    peak = np.max(np.abs(audio))
     if peak > 0:
         audio = audio * (NORMALIZE_PEAK / peak)
 
@@ -125,7 +172,7 @@ def process_audio(audio: np.ndarray, channels: int) -> np.ndarray:
     # Clip to valid range
     audio = np.clip(audio, -1.0, 1.0)
 
-    return audio
+    return audio, stats
 
 
 def apply_noise_gate(audio: np.ndarray) -> np.ndarray:
@@ -270,19 +317,19 @@ def find_keyboard() -> InputDevice | None:
 
 def run_client(server_url: str, device: int | None, auto_paste: bool):
     """Main client loop."""
-    print(f"Server: {server_url}")
-    print("Finding keyboard...")
+    print(f"🌐 Server: {server_url}")
+    print("🔍 Finding keyboard...")
 
     keyboard = find_keyboard()
     if keyboard is None:
-        print("Error: No keyboard found. Make sure you're in the 'input' group:", file=sys.stderr)
-        print("  sudo usermod -a -G input $USER", file=sys.stderr)
-        print("  (then log out and back in)", file=sys.stderr)
+        print("❌ No keyboard found. Make sure you're in the 'input' group:", file=sys.stderr)
+        print("   sudo usermod -a -G input $USER", file=sys.stderr)
+        print("   (then log out and back in)", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Keyboard: {keyboard.name}")
-    print("Hotkey: Left Alt + Right Alt (hold to record)")
-    print("Ready.\n")
+    print(f"⌨️  Keyboard: {keyboard.name}")
+    print("🎯 Hotkey: Left Alt + Right Alt")
+    print("✅ Ready\n")
 
     recorder = AudioRecorder(device)
     pressed_keys = set()
@@ -304,7 +351,7 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
                         if ecodes.KEY_LEFTALT in pressed_keys and not is_recording:
                             # Start recording
                             is_recording = True
-                            print("Recording...", end="", flush=True)
+                            print("🎤 Recording... (release hotkey to stop)", end="", flush=True)
                             recorder.start()
 
                 elif key_event == 0:  # Release
@@ -318,44 +365,52 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
                             audio = recorder.stop()
 
                             if audio.size == 0:
-                                print(" (empty)")
+                                print("\r🎤 Recording... (empty)\n")
                                 continue
 
                             duration = len(audio) / SAMPLE_RATE_CAPTURE
-                            print(f" {duration:.1f}s")
+                            print(f"\r  🟢 [{duration:.1f}s]")
 
                             # Process audio
-                            print("Processing...", end="", flush=True)
-                            processed = process_audio(audio, recorder.channels)
-                            print(" done")
+                            processed, stats = process_audio(audio, recorder.channels)
+
+                            # Show audio stats
+                            quality_icons = {
+                                "Excellent": "✓",
+                                "Good": "✓",
+                                "OK": "○",
+                                "Noisy": "⚠",
+                                "Too quiet": "⚠",
+                                "Silent": "✗",
+                                "Empty": "✗",
+                            }
+                            icon = quality_icons.get(stats["quality"], "?")
+                            noise_floor = stats.get("noise_floor", 0) * 1000  # Show as milli-units
+                            print(f"📊 Peak: {stats['peak']:.3f} | Noise: {noise_floor:.2f}m | SNR: {stats['snr_db']:.1f}dB | {icon} {stats['quality']}")
 
                             # Transcribe
-                            print("Transcribing...", end="", flush=True)
+                            print("\n⏳ Transcribing...", end="", flush=True)
                             try:
                                 result = transcribe(processed, server_url)
                                 text = result.get("text", "").strip()
-                                lang = result.get("language", "?")
-                                ms = result.get("duration_ms", 0)
-
-                                print(f" [{lang}] {ms}ms")
 
                                 if text:
-                                    print(f">>> {text}\n")
+                                    print(f"\r📝 \"{text}\"\n")
 
                                     # Copy and paste (add trailing space for follow-up text)
                                     copy_to_clipboard(text + " ")
                                     if auto_paste:
                                         paste()
                                 else:
-                                    print("(no speech detected)\n")
+                                    print("\r📝 (no speech detected)\n")
 
                             except requests.RequestException as e:
-                                print(f" Error: {e}", file=sys.stderr)
+                                print(f"\r❌ Error: {e}\n", file=sys.stderr)
 
         except OSError as e:
             # Keyboard disconnected
-            print(f"\nKeyboard disconnected: {e}", file=sys.stderr)
-            print("Attempting to reconnect...", file=sys.stderr)
+            print(f"\n⚠️  Keyboard disconnected: {e}", file=sys.stderr)
+            print("🔄 Attempting to reconnect...", file=sys.stderr)
 
             # Reset state
             pressed_keys.clear()
@@ -367,12 +422,12 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
             time.sleep(2)
             keyboard = find_keyboard()
             while keyboard is None:
-                print("Waiting for keyboard...", file=sys.stderr)
+                print("⏳ Waiting for keyboard...", file=sys.stderr)
                 time.sleep(3)
                 keyboard = find_keyboard()
 
-            print(f"Reconnected: {keyboard.name}")
-            print("Ready.\n")
+            print(f"⌨️  Reconnected: {keyboard.name}")
+            print("✅ Ready\n")
 
 
 def main():
