@@ -281,17 +281,26 @@ def copy_to_clipboard(text: str):
 
 
 def paste():
-    """Paste from clipboard using ydotool."""
+    """Paste from clipboard using ydotool. Tries both Ctrl+V and Ctrl+Shift+V."""
     time.sleep(0.2)
     try:
+        # Ctrl+Shift+V for Electron apps (Cursor, VS Code)
         subprocess.run(
-            ["ydotool", "key", "--delay", "100", "--key-delay", "20", "ctrl+shift+v"],
+            ["ydotool", "key", "--delay", "50", "--key-delay", "20", "ctrl+shift+v"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+        time.sleep(0.05)
+        # Ctrl+V for regular apps (Notepad++, Wine, native apps)
+        subprocess.run(
+            ["ydotool", "key", "--delay", "50", "--key-delay", "20", "ctrl+v"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=5,
         )
     except FileNotFoundError:
-        print("Warning: ydotool not found, skipping auto-paste", file=sys.stderr)
+        print("⚠️  ydotool not found, skipping auto-paste", file=sys.stderr)
     except subprocess.TimeoutExpired:
         pass
 
@@ -301,13 +310,28 @@ def find_keyboard() -> InputDevice | None:
     for path in list_devices():
         try:
             device = InputDevice(path)
+            name_lower = device.name.lower()
+
+            # Skip devices that are clearly mice/touchpads
+            if any(x in name_lower for x in ["mouse", "touchpad", "trackpad"]):
+                continue
+
             caps = device.capabilities()
 
             # Check if device has key events
             if ecodes.EV_KEY in caps:
                 keys = caps[ecodes.EV_KEY]
-                # Look for Alt keys
-                if ecodes.KEY_LEFTALT in keys and ecodes.KEY_RIGHTALT in keys:
+                # Must have Alt keys AND typical keyboard keys (letters)
+                has_alt_keys = (
+                    ecodes.KEY_LEFTALT in keys and
+                    ecodes.KEY_RIGHTALT in keys
+                )
+                has_letter_keys = (
+                    ecodes.KEY_A in keys and
+                    ecodes.KEY_Z in keys and
+                    ecodes.KEY_SPACE in keys
+                )
+                if has_alt_keys and has_letter_keys:
                     return device
         except (PermissionError, OSError):
             continue
