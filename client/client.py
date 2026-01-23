@@ -282,19 +282,19 @@ def copy_to_clipboard(text: str):
 
 def paste():
     """Paste from clipboard using ydotool. Tries both Ctrl+V and Ctrl+Shift+V."""
-    time.sleep(0.2)
+    time.sleep(0.3)
     try:
         # Ctrl+Shift+V for Electron apps (Cursor, VS Code)
         subprocess.run(
-            ["ydotool", "key", "--delay", "50", "--key-delay", "20", "ctrl+shift+v"],
+            ["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+shift+v"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=5,
         )
-        time.sleep(0.05)
+        time.sleep(0.15)
         # Ctrl+V for regular apps (Notepad++, Wine, native apps)
         subprocess.run(
-            ["ydotool", "key", "--delay", "50", "--key-delay", "20", "ctrl+v"],
+            ["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+v"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=5,

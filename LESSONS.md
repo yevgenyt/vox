@@ -17,13 +17,15 @@ Decisions and gotchas to avoid repeating mistakes.
 - **Ctrl+Shift+V alone** - doesn't work in Wine/Notepad++
 
 ### Paste function (working version)
-Send BOTH shortcuts - one will work, the other is ignored:
+Send BOTH shortcuts - one will work, the other is ignored.
+**Use longer delays** to avoid timing issues (Shift+V instead of Ctrl+Shift+V):
 ```python
+time.sleep(0.3)  # Wait before pasting
 # Ctrl+Shift+V for Electron apps (Cursor, VS Code)
-subprocess.run(["ydotool", "key", "--delay", "50", "--key-delay", "20", "ctrl+shift+v"], ...)
-time.sleep(0.05)
+subprocess.run(["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+shift+v"], ...)
+time.sleep(0.15)  # Wait between attempts
 # Ctrl+V for regular apps (Notepad++, Wine, native apps)
-subprocess.run(["ydotool", "key", "--delay", "50", "--key-delay", "20", "ctrl+v"], ...)
+subprocess.run(["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+v"], ...)
 ```
 
 ---
