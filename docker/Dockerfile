@@ -35,7 +35,7 @@ RUN cd /opt/whisper.cpp && \
     ./models/download-ggml-model.sh small
 
 # Create non-root user
-RUN useradd -m -u 1000 whisper
+RUN useradd -m whisper
 
 # Set up Python environment
 WORKDIR /app
