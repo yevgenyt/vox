@@ -75,6 +75,39 @@ Use numeric group IDs, not names (container doesn't have render/video groups):
 ### Required packages for Vulkan build
 - `glslc` (not just `glslang-tools`)
 
+### Run as non-root
+Always run containers as non-root user, especially with GPU access:
+```dockerfile
+RUN useradd -m -u 1000 whisper
+RUN chown -R whisper:whisper /app /opt/whisper.cpp
+USER whisper
+```
+
+---
+
+## Server Security
+
+### File size limit
+25 MB limit covers ~5 min of 48kHz stereo audio:
+```python
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    if request.method == "POST":
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+            return JSONResponse(status_code=413, content={"detail": "File too large"})
+    return await call_next(request)
+```
+
+### Audio file sizes reference
+| Sample Rate | Channels | Per Minute |
+|-------------|----------|------------|
+| 16kHz | mono | 1.9 MB |
+| 48kHz | mono | 5.8 MB |
+| 48kHz | stereo | 11.5 MB |
+
 ---
 
 ## Client Script (vox)

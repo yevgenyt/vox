@@ -34,6 +34,9 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git && \
 RUN cd /opt/whisper.cpp && \
     ./models/download-ggml-model.sh small
 
+# Create non-root user
+RUN useradd -m -u 1000 whisper
+
 # Set up Python environment
 WORKDIR /app
 RUN python3 -m venv /app/venv
@@ -45,6 +48,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy server code
 COPY server/ .
+
+# Set ownership and switch to non-root user
+RUN chown -R whisper:whisper /app /opt/whisper.cpp
+USER whisper
 
 # Environment variables for whisper.cpp
 ENV WHISPER_CLI=/opt/whisper.cpp/build/bin/whisper-cli
