@@ -288,67 +288,91 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
     pressed_keys = set()
     is_recording = False
 
-    for event in keyboard.read_loop():
-        if event.type != ecodes.EV_KEY:
-            continue
+    while True:
+        try:
+            for event in keyboard.read_loop():
+                if event.type != ecodes.EV_KEY:
+                    continue
 
-        key_event = event.value  # 0=release, 1=press, 2=hold
+                key_event = event.value  # 0=release, 1=press, 2=hold
 
-        if key_event == 1:  # Press
-            if event.code == ecodes.KEY_LEFTALT:
-                pressed_keys.add(ecodes.KEY_LEFTALT)
+                if key_event == 1:  # Press
+                    if event.code == ecodes.KEY_LEFTALT:
+                        pressed_keys.add(ecodes.KEY_LEFTALT)
 
-            elif event.code == ecodes.KEY_RIGHTALT:
-                if ecodes.KEY_LEFTALT in pressed_keys and not is_recording:
-                    # Start recording
-                    is_recording = True
-                    print("Recording...", end="", flush=True)
-                    recorder.start()
+                    elif event.code == ecodes.KEY_RIGHTALT:
+                        if ecodes.KEY_LEFTALT in pressed_keys and not is_recording:
+                            # Start recording
+                            is_recording = True
+                            print("Recording...", end="", flush=True)
+                            recorder.start()
 
-        elif key_event == 0:  # Release
-            if event.code == ecodes.KEY_LEFTALT:
-                pressed_keys.discard(ecodes.KEY_LEFTALT)
+                elif key_event == 0:  # Release
+                    if event.code == ecodes.KEY_LEFTALT:
+                        pressed_keys.discard(ecodes.KEY_LEFTALT)
 
-            elif event.code == ecodes.KEY_RIGHTALT:
-                if is_recording:
-                    # Stop recording and transcribe
-                    is_recording = False
-                    audio = recorder.stop()
+                    elif event.code == ecodes.KEY_RIGHTALT:
+                        if is_recording:
+                            # Stop recording and transcribe
+                            is_recording = False
+                            audio = recorder.stop()
 
-                    if audio.size == 0:
-                        print(" (empty)")
-                        continue
+                            if audio.size == 0:
+                                print(" (empty)")
+                                continue
 
-                    duration = len(audio) / SAMPLE_RATE_CAPTURE
-                    print(f" {duration:.1f}s")
+                            duration = len(audio) / SAMPLE_RATE_CAPTURE
+                            print(f" {duration:.1f}s")
 
-                    # Process audio
-                    print("Processing...", end="", flush=True)
-                    processed = process_audio(audio, recorder.channels)
-                    print(" done")
+                            # Process audio
+                            print("Processing...", end="", flush=True)
+                            processed = process_audio(audio, recorder.channels)
+                            print(" done")
 
-                    # Transcribe
-                    print("Transcribing...", end="", flush=True)
-                    try:
-                        result = transcribe(processed, server_url)
-                        text = result.get("text", "").strip()
-                        lang = result.get("language", "?")
-                        ms = result.get("duration_ms", 0)
+                            # Transcribe
+                            print("Transcribing...", end="", flush=True)
+                            try:
+                                result = transcribe(processed, server_url)
+                                text = result.get("text", "").strip()
+                                lang = result.get("language", "?")
+                                ms = result.get("duration_ms", 0)
 
-                        print(f" [{lang}] {ms}ms")
+                                print(f" [{lang}] {ms}ms")
 
-                        if text:
-                            print(f">>> {text}\n")
+                                if text:
+                                    print(f">>> {text}\n")
 
-                            # Copy and paste (add trailing space for follow-up text)
-                            copy_to_clipboard(text + " ")
-                            if auto_paste:
-                                paste()
-                        else:
-                            print("(no speech detected)\n")
+                                    # Copy and paste (add trailing space for follow-up text)
+                                    copy_to_clipboard(text + " ")
+                                    if auto_paste:
+                                        paste()
+                                else:
+                                    print("(no speech detected)\n")
 
-                    except requests.RequestException as e:
-                        print(f" Error: {e}", file=sys.stderr)
+                            except requests.RequestException as e:
+                                print(f" Error: {e}", file=sys.stderr)
+
+        except OSError as e:
+            # Keyboard disconnected
+            print(f"\nKeyboard disconnected: {e}", file=sys.stderr)
+            print("Attempting to reconnect...", file=sys.stderr)
+
+            # Reset state
+            pressed_keys.clear()
+            if is_recording:
+                is_recording = False
+                recorder.stop()
+
+            # Try to find keyboard again
+            time.sleep(2)
+            keyboard = find_keyboard()
+            while keyboard is None:
+                print("Waiting for keyboard...", file=sys.stderr)
+                time.sleep(3)
+                keyboard = find_keyboard()
+
+            print(f"Reconnected: {keyboard.name}")
+            print("Ready.\n")
 
 
 def main():

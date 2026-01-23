@@ -1,7 +1,9 @@
 #!/bin/bash
 # Vox - Voice transcription client
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve symlinks to get real script location
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 cd "$SCRIPT_DIR"
 
 exec ./venv/bin/python client.py --server http://127.0.0.1:5000 "$@"
