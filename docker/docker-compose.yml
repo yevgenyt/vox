@@ -1,0 +1,14 @@
+services:
+  transcriber:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "5000:5000"
+    devices:
+      - /dev/dri:/dev/dri      # GPU access (Vulkan)
+      - /dev/kfd:/dev/kfd      # AMD ROCm (optional)
+    group_add:
+      - "44"    # video
+      - "991"   # render
+    restart: unless-stopped

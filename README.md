@@ -1,4 +1,4 @@
-# Voice Transcriber Server
+# Vox - Voice Transcriber
 
 Containerized voice transcription service using whisper.cpp with Vulkan GPU acceleration.
 
@@ -8,29 +8,63 @@ Containerized voice transcription service using whisper.cpp with Vulkan GPU acce
 
 ```bash
 cd docker
-docker-compose up -d
+podman-compose up -d
 ```
 
-### Client
+Or manually:
+```bash
+podman build -t voice-transcriber -f docker/Dockerfile ..
+podman run -d --name voice-transcriber -p 5000:5000 \
+  --device /dev/dri --device /dev/kfd \
+  --group-add 44 --group-add 991 \
+  voice-transcriber
+```
+
+### Client (Vox)
 
 ```bash
 cd client
-pip install -r requirements.txt
-python client.py
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+./vox
 ```
 
 ## Usage
 
 1. Start the server container
-2. Run the client on any machine (local or LAN)
+2. Run Vox client
 3. Press **Left Alt + Right Alt** to record
 4. Release **Right Alt** to transcribe and paste
 
+## Running as a Service
+
+Once stable, enable Vox to start automatically on login:
+
+```bash
+systemctl --user enable --now vox
+```
+
+Manage the service:
+```bash
+systemctl --user status vox    # Check status
+systemctl --user stop vox      # Stop
+systemctl --user start vox     # Start
+systemctl --user restart vox   # Restart
+journalctl --user -u vox -f    # View logs
+```
+
+To disable and run manually again:
+```bash
+systemctl --user disable --now vox
+./vox
+```
+
 ## Requirements
 
-- Docker with GPU support
+- Podman with GPU support
 - AMD GPU with Vulkan (or modify for NVIDIA/CUDA)
 - Python 3.10+
+- User in `input` group for hotkey detection: `sudo usermod -a -G input $USER`
 
 ## API
 

@@ -170,17 +170,25 @@ elif key_event == 0:  # Release
 ```
 voice-transcriber-server/
 ├── PROJECT.md              # This file
+├── README.md               # User documentation
 ├── docker/
 │   ├── Dockerfile          # whisper.cpp + FastAPI + Vulkan
-│   └── docker-compose.yml  # Easy startup with GPU passthrough
+│   └── docker-compose.yml  # Podman/Docker compose with GPU passthrough
 ├── server/
 │   ├── server.py           # FastAPI application
 │   ├── transcriber.py      # whisper.cpp wrapper
 │   └── requirements.txt    # FastAPI, python-multipart
-├── client/
-│   ├── client.py           # Hotkey + record + send + paste
-│   └── requirements.txt    # sounddevice, requests, evdev
-└── README.md               # User documentation
+└── client/
+    ├── client.py           # Hotkey + record + send + paste
+    ├── vox                  # Launcher script
+    ├── venv/               # Python virtual environment
+    └── requirements.txt    # sounddevice, requests, evdev
+
+~/.config/systemd/user/
+└── vox.service             # Systemd user service (optional)
+
+~/.local/share/applications/
+└── vox.desktop             # Desktop entry for app launchers
 ```
 
 ## API Contract
@@ -225,8 +233,8 @@ services:
 
 ## Next Steps
 
-1. [ ] Create Dockerfile with whisper.cpp + Vulkan
-2. [ ] Implement FastAPI server
-3. [ ] Extract and simplify client from voice-transcriber
-4. [ ] Test locally
+1. [x] Create Dockerfile with whisper.cpp + Vulkan
+2. [x] Implement FastAPI server
+3. [x] Extract and simplify client from voice-transcriber
+4. [x] Test locally
 5. [ ] Test from LAN client

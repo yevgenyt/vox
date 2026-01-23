@@ -1,0 +1,7 @@
+#!/bin/bash
+# Vox - Voice transcription client
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+exec ./venv/bin/python client.py --server http://127.0.0.1:5000 "$@"
