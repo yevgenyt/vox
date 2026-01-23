@@ -22,10 +22,20 @@ podman run -d --name voice-transcriber -p 5000:5000 \
 
 ### Client (Vox)
 
+First-time setup:
 ```bash
 cd client
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
+```
+
+Run from anywhere:
+```bash
+vox
+```
+
+Or from the client directory:
+```bash
 ./vox
 ```
 
@@ -61,10 +71,14 @@ systemctl --user disable --now vox
 
 ## Requirements
 
+### Server
 - Podman with GPU support
 - AMD GPU with Vulkan (or modify for NVIDIA/CUDA)
+
+### Client
 - Python 3.10+
-- User in `input` group for hotkey detection: `sudo usermod -a -G input $USER`
+- User in `input` group: `sudo usermod -a -G input $USER` (then log out/in)
+- System packages: `wl-copy`, `xclip`, `ydotool`
 
 ## API
 

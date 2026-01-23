@@ -161,7 +161,13 @@ elif key_event == 0:  # Release
 2. **wtype** - Doesn't work on GNOME (missing Wayland protocol)
 3. **Streaming mode (whisper-stream)** - Too complex, batch mode more reliable
 4. **Ctrl+V in Cursor** - Shows "no image", needs Ctrl+Shift+V
-5. **wl-copy alone** - XWayland apps don't see Wayland clipboard
+5. **Ctrl+Shift+V in Wine/Notepad++** - Doesn't work, needs Ctrl+V
+6. **wl-copy alone** - XWayland apps don't see Wayland clipboard
+7. **ydotool with keycodes** - Types numbers instead of sending keys
+8. **Filtering keyboards by EV_REL** - Keyboards can have relative axes too
+9. **Filtering keyboards by letter keys** - Some mice (MX Master 2S) report having them
+
+See [LESSONS.md](LESSONS.md) for detailed solutions.
 
 ---
 
@@ -169,8 +175,9 @@ elif key_event == 0:  # Release
 
 ```
 voice-transcriber-server/
-├── PROJECT.md              # This file
+├── PROJECT.md              # Architecture and knowledge transfer
 ├── README.md               # User documentation
+├── LESSONS.md              # Development lessons learned (avoid repeating mistakes)
 ├── docker/
 │   ├── Dockerfile          # whisper.cpp + FastAPI + Vulkan
 │   └── docker-compose.yml  # Podman/Docker compose with GPU passthrough
@@ -181,11 +188,14 @@ voice-transcriber-server/
 └── client/
     ├── client.py           # Hotkey + record + send + paste
     ├── vox                  # Launcher script
-    ├── venv/               # Python virtual environment
+    ├── venv/               # Python virtual environment (not in git)
     └── requirements.txt    # sounddevice, requests, evdev
 
+~/.local/bin/
+└── vox -> .../client/vox   # Symlink for global access
+
 ~/.config/systemd/user/
-└── vox.service             # Systemd user service (optional)
+└── vox.service             # Systemd user service (disabled, enable when stable)
 
 ~/.local/share/applications/
 └── vox.desktop             # Desktop entry for app launchers
@@ -231,10 +241,18 @@ services:
       - render
 ```
 
-## Next Steps
+## Status
 
+### Completed
 1. [x] Create Dockerfile with whisper.cpp + Vulkan
 2. [x] Implement FastAPI server
 3. [x] Extract and simplify client from voice-transcriber
-4. [x] Test locally
-5. [ ] Test from LAN client
+4. [x] Test locally (Notepad++ and Cursor)
+5. [x] Add audio stats display (Peak, SNR, quality)
+6. [x] Keyboard disconnect/reconnect handling
+7. [x] Global `vox` command via symlink
+8. [x] Systemd user service (ready, disabled)
+
+### Pending
+- [ ] Test from LAN client
+- [ ] Enable systemd service when stable

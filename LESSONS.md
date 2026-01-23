@@ -88,8 +88,51 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 
 ---
 
+## Keyboard Reconnection
+
+### Problem
+When keyboard disconnects, `read_loop()` raises `OSError: [Errno 19] No such device`.
+
+### Solution
+Wrap the event loop in try/except, reset state, and poll for keyboard reconnection:
+```python
+while True:
+    try:
+        for event in keyboard.read_loop():
+            ...
+    except OSError:
+        # Reset state, wait, find_keyboard() again
+```
+
+---
+
+## ydotool Timing Issues
+
+### Problem
+With short delays, `ctrl+shift+v` becomes `Shift+V` (types uppercase V).
+
+### Solution
+Use longer delays:
+- `--delay 150` (wait before pressing)
+- `--key-delay 50` (between key events)
+- `time.sleep(0.3)` before starting
+- `time.sleep(0.15)` between paste attempts
+
+---
+
+## Transcription Output
+
+### Trailing space
+Add trailing space after transcribed text so it doesn't blend with follow-up typing:
+```python
+copy_to_clipboard(text + " ")
+```
+
+---
+
 ## Environment
 
 - **Session**: Wayland (GNOME)
 - **Podman** instead of Docker
 - User must be in `input` group for evdev keyboard access
+- **ydotoold** not required but may improve reliability
