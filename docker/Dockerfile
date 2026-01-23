@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     mesa-vulkan-drivers \
     glslang-tools \
     glslc \
+    # Audio conversion
+    ffmpeg \
     # Python
     python3 \
     python3-pip \
