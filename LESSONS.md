@@ -75,13 +75,15 @@ Use numeric group IDs, not names (container doesn't have render/video groups):
 ### Required packages for Vulkan build
 - `glslc` (not just `glslang-tools`)
 
-### Run as non-root
-Always run containers as non-root user, especially with GPU access:
-```dockerfile
-RUN useradd -m -u 1000 whisper
-RUN chown -R whisper:whisper /app /opt/whisper.cpp
-USER whisper
-```
+### Non-root user vs GPU access
+**Problem**: Running as non-root breaks GPU access in Podman rootless mode.
+- Device permissions map to `nobody:nogroup` inside container
+- `--userns=keep-id` and `--group-add keep-groups` don't fix it
+
+**Decision**: Run as root inside container for GPU access.
+- Podman rootless already provides isolation via user namespaces
+- Container root ≠ host root (it's the unprivileged user)
+- Acceptable for local-only service
 
 ---
 
