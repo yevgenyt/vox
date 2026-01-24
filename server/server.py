@@ -71,23 +71,37 @@ async def health():
 async def transcribe_audio(
     audio: UploadFile = File(...),
     debug: bool = Query(False, description="Include debug logs in response"),
+    head: float | None = Query(None, gt=0, description="Transcribe only the first N seconds"),
+    tail: float | None = Query(None, gt=0, description="Transcribe only the last N seconds"),
 ):
     """
     Transcribe uploaded audio file.
 
     Accepts audio file (WAV preferred, 16kHz mono recommended).
     Returns transcribed text with detected language.
-    Add ?debug=true to include processing logs in response.
+
+    Options:
+    - ?debug=true - Include processing logs in response
+    - ?head=10 - Transcribe only the first 10 seconds
+    - ?tail=10 - Transcribe only the last 10 seconds
     """
     # Initialize per-request log capture
     logs = []
     request_logs.set(logs)
+
+    # Validate mutually exclusive parameters
+    if head is not None and tail is not None:
+        raise HTTPException(status_code=400, detail="Cannot specify both 'head' and 'tail'")
 
     # Validate file
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
     logger.info(f"Received file: {audio.filename}")
+    if head is not None:
+        logger.info(f"Segment: head={head}s")
+    elif tail is not None:
+        logger.info(f"Segment: tail={tail}s")
 
     # Save uploaded file to temp location
     suffix = Path(audio.filename).suffix or ".wav"
@@ -102,7 +116,7 @@ async def transcribe_audio(
             logger.info(f"Saved {len(content)} bytes to {tmp_path}")
 
             # Transcribe
-            result = transcribe(tmp_path, logger=logger)
+            result = transcribe(tmp_path, logger=logger, head=head, tail=tail)
 
             if debug:
                 result["logs"] = logs

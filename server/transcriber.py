@@ -45,13 +45,72 @@ def convert_to_wav(audio_path: Path, logger: logging.Logger) -> Path:
     return wav_path
 
 
-def transcribe(audio_path: str | Path, logger: logging.Logger = None) -> dict:
+def extract_segment(
+    audio_path: Path,
+    head: float | None,
+    tail: float | None,
+    logger: logging.Logger,
+) -> Path:
+    """
+    Extract a segment from the audio file.
+
+    Args:
+        audio_path: Path to audio file
+        head: Extract first N seconds (mutually exclusive with tail)
+        tail: Extract last N seconds (mutually exclusive with head)
+        logger: Logger for debug output
+
+    Returns:
+        Path to extracted segment (new file if extracted, original if no extraction)
+    """
+    if head is None and tail is None:
+        return audio_path
+
+    segment_path = audio_path.with_stem(audio_path.stem + "_segment")
+
+    if head is not None:
+        logger.info(f"Extracting first {head}s (head)")
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(audio_path),
+            "-t", str(head),          # Duration from start
+            "-c", "copy",             # No re-encoding
+            str(segment_path),
+        ]
+    else:  # tail
+        logger.info(f"Extracting last {tail}s (tail)")
+        cmd = [
+            "ffmpeg", "-y",
+            "-sseof", str(-tail),     # Seek from end (negative value)
+            "-i", str(audio_path),
+            "-c", "copy",             # No re-encoding
+            str(segment_path),
+        ]
+
+    result = subprocess.run(cmd, capture_output=True, timeout=60)
+
+    if result.returncode != 0:
+        logger.error(f"Segment extraction failed: {result.stderr.decode()}")
+        raise RuntimeError(f"Segment extraction failed: {result.stderr.decode()}")
+
+    logger.info(f"Extracted segment to {segment_path} ({segment_path.stat().st_size} bytes)")
+    return segment_path
+
+
+def transcribe(
+    audio_path: str | Path,
+    logger: logging.Logger = None,
+    head: float | None = None,
+    tail: float | None = None,
+) -> dict:
     """
     Transcribe audio file using whisper.cpp.
 
     Args:
         audio_path: Path to audio file (WAV, MP3, OGG, etc.)
         logger: Optional logger for debug output
+        head: Extract and transcribe only the first N seconds
+        tail: Extract and transcribe only the last N seconds
 
     Returns:
         dict with keys: text, language, duration_ms
@@ -60,22 +119,27 @@ def transcribe(audio_path: str | Path, logger: logging.Logger = None) -> dict:
         logger = _null_logger
 
     audio_path = Path(audio_path)
+    files_to_cleanup = []
 
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
     logger.info(f"Processing {audio_path} ({audio_path.stat().st_size} bytes)")
 
-    # Convert to WAV if needed
-    converted = False
-    if audio_path.suffix.lower() in NEEDS_CONVERSION:
-        audio_path = convert_to_wav(audio_path, logger)
-        converted = True
-
-    logger.info(f"Running whisper-cli with model {Path(WHISPER_MODEL).name}")
-    start_time = time.time()
-
     try:
+        # Convert to WAV if needed
+        if audio_path.suffix.lower() in NEEDS_CONVERSION:
+            audio_path = convert_to_wav(audio_path, logger)
+            files_to_cleanup.append(audio_path)
+
+        # Extract segment if head/tail specified
+        if head is not None or tail is not None:
+            audio_path = extract_segment(audio_path, head, tail, logger)
+            files_to_cleanup.append(audio_path)
+
+        logger.info(f"Running whisper-cli with model {Path(WHISPER_MODEL).name}")
+        start_time = time.time()
+
         # Run whisper-cli
         result = subprocess.run(
             [
@@ -121,7 +185,8 @@ def transcribe(audio_path: str | Path, logger: logging.Logger = None) -> dict:
         }
 
     finally:
-        # Clean up converted file
-        if converted and audio_path.exists():
-            audio_path.unlink(missing_ok=True)
-            logger.debug(f"Cleaned up converted file {audio_path}")
+        # Clean up temporary files
+        for file_path in files_to_cleanup:
+            if file_path.exists():
+                file_path.unlink(missing_ok=True)
+                logger.debug(f"Cleaned up {file_path}")

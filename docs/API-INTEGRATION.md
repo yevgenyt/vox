@@ -43,6 +43,8 @@ Transcribe an audio file to text.
 ```
 POST /transcribe
 POST /transcribe?debug=true
+POST /transcribe?head=10
+POST /transcribe?tail=15
 ```
 
 **Request**:
@@ -53,6 +55,10 @@ POST /transcribe?debug=true
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `debug` | boolean | `false` | Include server-side processing logs in response |
+| `head` | float | `null` | Transcribe only the first N seconds |
+| `tail` | float | `null` | Transcribe only the last N seconds |
+
+**Note**: `head` and `tail` are mutually exclusive - you cannot specify both.
 
 **Supported Formats**:
 - WAV (preferred, 16kHz mono)

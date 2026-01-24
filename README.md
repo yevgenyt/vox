@@ -96,6 +96,20 @@ Response:
 }
 ```
 
+### Segment Extraction
+
+Transcribe only a portion of the audio:
+
+```bash
+# Transcribe only the first 10 seconds
+curl -X POST "http://localhost:5000/transcribe?head=10" \
+  -F "audio=@recording.wav"
+
+# Transcribe only the last 15 seconds
+curl -X POST "http://localhost:5000/transcribe?tail=15" \
+  -F "audio=@recording.wav"
+```
+
 ### Debug Mode
 
 Add `?debug=true` to include server-side logs in the response:
