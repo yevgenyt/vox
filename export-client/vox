@@ -1,0 +1,15 @@
+#!/bin/bash
+# Vox - Voice transcription client
+#
+# Usage: ./vox [options]
+# Options are passed to client.py (--server, --device, --no-paste, --list-devices)
+
+# Resolve symlinks to get real script location
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+cd "$SCRIPT_DIR"
+
+# Default server URL - change this to your Vox server
+DEFAULT_SERVER="http://127.0.0.1:5000"
+
+exec ./venv/bin/python client.py --server "$DEFAULT_SERVER" "$@"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Vox - Voice transcription client
+After=graphical-session.target
+
+[Service]
+Type=simple
+# UPDATE THIS PATH to your installation location
+ExecStart=%h/Applications/vox-client/vox
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

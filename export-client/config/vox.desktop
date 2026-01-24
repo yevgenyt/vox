@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Vox
+Comment=Voice transcription client
+# UPDATE THIS PATH to your installation location
+Exec=%h/Applications/vox-client/vox
+Terminal=true
+Type=Application
+Categories=Utility;Audio;
+Keywords=voice;transcription;dictation;speech;
+Icon=audio-input-microphone
