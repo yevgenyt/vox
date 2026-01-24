@@ -178,6 +178,8 @@ vox/
 ├── PROJECT.md              # Architecture and knowledge transfer
 ├── README.md               # User documentation
 ├── LESSONS.md              # Development lessons learned (avoid repeating mistakes)
+├── docs/
+│   └── API-INTEGRATION.md  # External client integration guide
 ├── docker/
 │   ├── Dockerfile          # whisper.cpp + FastAPI + Vulkan
 │   └── docker-compose.yml  # Podman/Docker compose with GPU passthrough
@@ -185,11 +187,13 @@ vox/
 │   ├── server.py           # FastAPI application
 │   ├── transcriber.py      # whisper.cpp wrapper
 │   └── requirements.txt    # FastAPI, python-multipart
-└── client/
-    ├── client.py           # Hotkey + record + send + paste
-    ├── vox                  # Launcher script
-    ├── venv/               # Python virtual environment (not in git)
-    └── requirements.txt    # sounddevice, requests, evdev
+├── client/
+│   ├── client.py           # Hotkey + record + send + paste
+│   ├── vox                  # Launcher script
+│   ├── venv/               # Python virtual environment (not in git)
+│   └── requirements.txt    # sounddevice, requests, evdev
+└── n8n/
+    └── vox-transcribe-workflow.json  # Sample n8n workflow
 
 ~/.local/bin/
 └── vox -> .../client/vox   # Symlink for global access
@@ -207,7 +211,14 @@ vox/
 
 **Request**:
 - Content-Type: `multipart/form-data`
-- Body: `audio` file (WAV, 16kHz mono preferred)
+- Body: `audio` file (WAV, MP3, OGG, FLAC, M4A, AAC, WMA, OPUS, WebM)
+
+**Query Parameters**:
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `debug` | boolean | `false` | Include server-side processing logs in response |
+| `head` | float | `null` | Transcribe only the first N seconds |
+| `tail` | float | `null` | Transcribe only the last N seconds |
 
 **Response**:
 ```json
@@ -218,9 +229,20 @@ vox/
 }
 ```
 
-**Example**:
+With `?debug=true`, response includes `logs` array with processing details.
+
+**Examples**:
 ```bash
+# Basic transcription
 curl -X POST http://localhost:5000/transcribe \
+  -F "audio=@recording.wav"
+
+# Transcribe last 10 seconds with debug logs
+curl -X POST "http://localhost:5000/transcribe?tail=10&debug=true" \
+  -F "audio=@recording.wav"
+
+# Transcribe first 15 seconds
+curl -X POST "http://localhost:5000/transcribe?head=15" \
   -F "audio=@recording.wav"
 ```
 
@@ -252,7 +274,11 @@ services:
 6. [x] Keyboard disconnect/reconnect handling
 7. [x] Global `vox` command via symlink
 8. [x] Systemd user service (ready, disabled)
+9. [x] Multi-format audio support (MP3, OGG, FLAC, M4A, etc. via ffmpeg)
+10. [x] Debug mode with per-request logging (`?debug=true`)
+11. [x] Head/tail segment extraction (`?head=N`, `?tail=N`)
+12. [x] API integration documentation for external clients
+13. [x] Sample n8n workflow for LAN integration
 
 ### Pending
-- [ ] Test from LAN client
 - [ ] Enable systemd service when stable
