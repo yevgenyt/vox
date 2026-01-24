@@ -13,11 +13,11 @@ podman-compose up -d
 
 Or manually:
 ```bash
-podman build -t voice-transcriber -f docker/Dockerfile ..
-podman run -d --name voice-transcriber -p 5000:5000 \
-  --device /dev/dri --device /dev/kfd \
+podman build -t vox -f docker/Dockerfile .
+podman run -d --name vox --network host \
+  --device /dev/dri \
   --group-add 44 --group-add 991 \
-  voice-transcriber
+  vox
 ```
 
 ### Client (Vox)
