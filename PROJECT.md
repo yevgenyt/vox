@@ -273,7 +273,7 @@ services:
 5. [x] Add audio stats display (Peak, SNR, quality)
 6. [x] Keyboard disconnect/reconnect handling
 7. [x] Global `vox` command via symlink
-8. [x] Systemd user service (ready, disabled)
+8. [x] Systemd user service (enabled)
 9. [x] Multi-format audio support (MP3, OGG, FLAC, M4A, etc. via ffmpeg)
 10. [x] Debug mode with per-request logging (`?debug=true`)
 11. [x] Head/tail segment extraction (`?head=N`, `?tail=N`)
@@ -281,4 +281,4 @@ services:
 13. [x] Sample n8n workflow for LAN integration
 
 ### Pending
-- [ ] Enable systemd service when stable
+- None - all tasks completed!
