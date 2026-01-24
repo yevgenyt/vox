@@ -96,6 +96,31 @@ Response:
 }
 ```
 
+### Debug Mode
+
+Add `?debug=true` to include server-side logs in the response:
+
+```bash
+curl -X POST "http://localhost:5000/transcribe?debug=true" \
+  -F "audio=@recording.wav"
+```
+
+Response with logs:
+```json
+{
+  "text": "Hello world.",
+  "language": "en",
+  "duration_ms": 850,
+  "logs": [
+    "10:30:45 INFO Received file: recording.wav",
+    "10:30:45 INFO Saved 12345 bytes to /tmp/tmpXXXX.wav",
+    "10:30:45 INFO Processing /tmp/tmpXXXX.wav (12345 bytes)",
+    "10:30:45 INFO Running whisper-cli with model ggml-small.bin",
+    "10:30:46 INFO Transcribed in 850ms, language=en, text_len=12"
+  ]
+}
+```
+
 ## Architecture
 
 See [PROJECT.md](PROJECT.md) for detailed architecture and knowledge transfer from the standalone version.
