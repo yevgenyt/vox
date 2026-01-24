@@ -1,4 +1,4 @@
-# Voice Transcriber Server
+# Vox - Voice Transcription Server
 
 Client-server architecture for voice transcription using whisper.cpp.
 
@@ -35,7 +35,7 @@ A containerized transcription service that accepts audio and returns text, with 
 
 ---
 
-## Knowledge Transfer from voice-transcriber
+## Knowledge Transfer from Previous Implementation
 
 ### whisper.cpp Setup
 
@@ -174,7 +174,7 @@ See [LESSONS.md](LESSONS.md) for detailed solutions.
 ## File Structure
 
 ```
-voice-transcriber-server/
+vox/
 ├── PROJECT.md              # Architecture and knowledge transfer
 ├── README.md               # User documentation
 ├── LESSONS.md              # Development lessons learned (avoid repeating mistakes)
@@ -229,7 +229,7 @@ curl -X POST http://localhost:5000/transcribe \
 ```yaml
 # docker-compose.yml
 services:
-  transcriber:
+  vox:
     build: .
     ports:
       - "5000:5000"
@@ -246,7 +246,7 @@ services:
 ### Completed
 1. [x] Create Dockerfile with whisper.cpp + Vulkan
 2. [x] Implement FastAPI server
-3. [x] Extract and simplify client from voice-transcriber
+3. [x] Extract and simplify client
 4. [x] Test locally (Notepad++ and Cursor)
 5. [x] Add audio stats display (Peak, SNR, quality)
 6. [x] Keyboard disconnect/reconnect handling

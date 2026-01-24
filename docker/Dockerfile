@@ -1,4 +1,4 @@
-# Voice Transcriber Server
+# Vox - Voice Transcription Server
 # whisper.cpp with Vulkan GPU acceleration + FastAPI
 
 FROM ubuntu:24.04

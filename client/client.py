@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Voice transcriber client.
+Vox client - Voice transcription hotkey tool.
 
 Hotkey: Left Alt + Right Alt (hold to record, release Right Alt to transcribe)
 Requires: User in 'input' group for evdev access
@@ -459,7 +459,7 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Voice transcriber client")
+    parser = argparse.ArgumentParser(description="Vox - Voice transcription client")
     parser.add_argument(
         "--server",
         default="http://localhost:5000",

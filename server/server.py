@@ -42,8 +42,8 @@ logger.addHandler(console_handler)
 MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 
 app = FastAPI(
-    title="Voice Transcriber",
-    description="Transcription service using whisper.cpp with Vulkan GPU acceleration",
+    title="Vox",
+    description="Voice transcription service using whisper.cpp with Vulkan GPU acceleration",
     version="1.0.0",
 )
 
