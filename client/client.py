@@ -445,10 +445,14 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
             # Try to find keyboard again
             time.sleep(2)
             keyboard = find_keyboard()
-            while keyboard is None:
-                print("⏳ Waiting for keyboard...", file=sys.stderr)
-                time.sleep(3)
-                keyboard = find_keyboard()
+            if keyboard is None:
+                print("⏳ Waiting for keyboard...", end="", file=sys.stderr, flush=True)
+                while keyboard is None:
+                    time.sleep(3)
+                    keyboard = find_keyboard()
+                    if keyboard is None:
+                        print(".", end="", file=sys.stderr, flush=True)
+                print(file=sys.stderr)  # Newline after dots
 
             print(f"⌨️  Reconnected: {keyboard.name}")
             print("✅ Ready\n")
