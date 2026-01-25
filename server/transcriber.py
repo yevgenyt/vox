@@ -2,17 +2,61 @@
 
 import logging
 import os
+import struct
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
 
 WHISPER_CLI = os.environ.get("WHISPER_CLI", "/opt/whisper.cpp/build/bin/whisper-cli")
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "/opt/whisper.cpp/models/ggml-small.bin")
+WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models")
+WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "medium")
+
+# Available models (must be downloaded in Dockerfile)
+AVAILABLE_MODELS = {"small", "medium"}
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
 _null_logger.addHandler(logging.NullHandler())
+
+
+def get_model_path(model: str | None = None) -> Path:
+    """
+    Get the path to a Whisper model file.
+
+    Args:
+        model: Model name (tiny, base, small, medium, large) or None for default
+
+    Returns:
+        Path to the model file
+
+    Raises:
+        ValueError: If model is not available
+    """
+    if model is None:
+        model = WHISPER_DEFAULT_MODEL
+
+    model = model.lower()
+
+    if model not in AVAILABLE_MODELS:
+        raise ValueError(f"Model '{model}' not available. Choose from: {', '.join(sorted(AVAILABLE_MODELS))}")
+
+    return Path(WHISPER_MODEL_DIR) / f"ggml-{model}.bin"
+
+
+def list_models() -> dict:
+    """
+    List available models with their sizes.
+
+    Returns:
+        dict mapping model name to file size in bytes (or None if not found)
+    """
+    models = {}
+    for model in AVAILABLE_MODELS:
+        path = Path(WHISPER_MODEL_DIR) / f"ggml-{model}.bin"
+        models[model] = path.stat().st_size if path.exists() else None
+    return models
 
 # Formats that need conversion (whisper.cpp expects 16kHz mono WAV)
 NEEDS_CONVERSION = {".mp3", ".ogg", ".oga", ".flac", ".m4a", ".aac", ".wma", ".opus", ".webm"}
@@ -102,6 +146,7 @@ def transcribe(
     logger: logging.Logger = None,
     head: float | None = None,
     tail: float | None = None,
+    model: str | None = None,
 ) -> dict:
     """
     Transcribe audio file using whisper.cpp.
@@ -111,9 +156,10 @@ def transcribe(
         logger: Optional logger for debug output
         head: Extract and transcribe only the first N seconds
         tail: Extract and transcribe only the last N seconds
+        model: Whisper model to use (small, medium) or None for default
 
     Returns:
-        dict with keys: text, language, duration_ms
+        dict with keys: text, language, duration_ms, model
     """
     if logger is None:
         logger = _null_logger
@@ -137,14 +183,17 @@ def transcribe(
             audio_path = extract_segment(audio_path, head, tail, logger)
             files_to_cleanup.append(audio_path)
 
-        logger.info(f"Running whisper-cli with model {Path(WHISPER_MODEL).name}")
+        # Get model path (validates model name)
+        model_path = get_model_path(model)
+        model_name = model_path.stem.replace("ggml-", "")
+        logger.info(f"Running whisper-cli with model {model_name}")
         start_time = time.time()
 
         # Run whisper-cli
         result = subprocess.run(
             [
                 WHISPER_CLI,
-                "-m", WHISPER_MODEL,
+                "-m", str(model_path),
                 "-f", str(audio_path),
                 "-l", "auto",   # Auto-detect language
                 "-bs", "1",     # Greedy decoding (faster)
@@ -175,13 +224,14 @@ def transcribe(
                     language = parts[-1].strip().split()[0].lower()
                 break
 
-        logger.info(f"Transcribed in {duration_ms}ms, language={language}, text_len={len(text)}")
+        logger.info(f"Transcribed in {duration_ms}ms, model={model_name}, language={language}, text_len={len(text)}")
         logger.debug(f"whisper stderr: {result.stderr[:500]}" if result.stderr else "whisper stderr: (empty)")
 
         return {
             "text": text,
             "language": language,
             "duration_ms": duration_ms,
+            "model": model_name,
         }
 
     finally:
@@ -190,3 +240,93 @@ def transcribe(
             if file_path.exists():
                 file_path.unlink(missing_ok=True)
                 logger.debug(f"Cleaned up {file_path}")
+
+
+def _create_silent_wav(path: Path, duration_ms: int = 500, sample_rate: int = 16000) -> None:
+    """Create a silent WAV file for model warm-up."""
+    num_samples = int(sample_rate * duration_ms / 1000)
+
+    with open(path, "wb") as f:
+        # WAV header
+        f.write(b"RIFF")
+        data_size = num_samples * 2  # 16-bit = 2 bytes per sample
+        f.write(struct.pack("<I", 36 + data_size))  # File size - 8
+        f.write(b"WAVE")
+
+        # fmt chunk
+        f.write(b"fmt ")
+        f.write(struct.pack("<I", 16))  # Chunk size
+        f.write(struct.pack("<H", 1))   # PCM format
+        f.write(struct.pack("<H", 1))   # Mono
+        f.write(struct.pack("<I", sample_rate))
+        f.write(struct.pack("<I", sample_rate * 2))  # Byte rate
+        f.write(struct.pack("<H", 2))   # Block align
+        f.write(struct.pack("<H", 16))  # Bits per sample
+
+        # data chunk
+        f.write(b"data")
+        f.write(struct.pack("<I", data_size))
+        f.write(b"\x00" * data_size)  # Silence
+
+
+def warmup(logger: logging.Logger = None, model: str | None = None) -> dict:
+    """
+    Warm up the Whisper model by running a dummy transcription.
+
+    This loads the model into GPU memory and initializes the inference pipeline,
+    eliminating cold-start latency on the first real request.
+
+    Args:
+        logger: Optional logger for output
+        model: Model to warm up (None for default)
+
+    Returns:
+        dict with warmup stats: duration_ms, success, model
+    """
+    if logger is None:
+        logger = _null_logger
+
+    model_path = get_model_path(model)
+    model_name = model_path.stem.replace("ggml-", "")
+
+    logger.info("Starting model warm-up...")
+    logger.info(f"Model: {model_name} ({model_path})")
+    logger.info(f"CLI: {WHISPER_CLI}")
+
+    start_time = time.time()
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    try:
+        # Create a short silent audio file
+        _create_silent_wav(tmp_path, duration_ms=500)
+        logger.info(f"Created warm-up audio: {tmp_path} ({tmp_path.stat().st_size} bytes)")
+
+        # Run transcription to load model into GPU memory
+        result = subprocess.run(
+            [
+                WHISPER_CLI,
+                "-m", str(model_path),
+                "-f", str(tmp_path),
+                "-l", "en",     # Skip auto-detect for faster warm-up
+                "-bs", "1",
+                "-nt",
+                "-np",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        if result.returncode != 0:
+            logger.error(f"Warm-up failed: {result.stderr}")
+            return {"success": False, "duration_ms": duration_ms, "model": model_name, "error": result.stderr}
+
+        logger.info(f"Model warm-up complete in {duration_ms}ms")
+        return {"success": True, "duration_ms": duration_ms, "model": model_name}
+
+    finally:
+        tmp_path.unlink(missing_ok=True)

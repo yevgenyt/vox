@@ -219,13 +219,15 @@ vox/
 | `debug` | boolean | `false` | Include server-side processing logs in response |
 | `head` | float | `null` | Transcribe only the first N seconds |
 | `tail` | float | `null` | Transcribe only the last N seconds |
+| `model` | string | `medium` | Whisper model to use (`small`, `medium`) |
 
 **Response**:
 ```json
 {
   "text": "Transcribed text here.",
   "language": "en",
-  "duration_ms": 1234
+  "duration_ms": 1234,
+  "model": "medium"
 }
 ```
 
@@ -244,6 +246,24 @@ curl -X POST "http://localhost:5000/transcribe?tail=10&debug=true" \
 # Transcribe first 15 seconds
 curl -X POST "http://localhost:5000/transcribe?head=15" \
   -F "audio=@recording.wav"
+
+# Use small model for faster transcription
+curl -X POST "http://localhost:5000/transcribe?model=small" \
+  -F "audio=@recording.wav"
+```
+
+### GET /models
+
+**Response**:
+```json
+{
+  "default": "medium",
+  "available": ["small", "medium"],
+  "models": {
+    "small": {"size_bytes": 488836321},
+    "medium": {"size_bytes": 1533774781}
+  }
+}
 ```
 
 ## Docker GPU Passthrough (AMD Vulkan)
@@ -279,6 +299,5 @@ services:
 11. [x] Head/tail segment extraction (`?head=N`, `?tail=N`)
 12. [x] API integration documentation for external clients
 13. [x] Sample n8n workflow for LAN integration
-
-### Pending
-- None - all tasks completed!
+14. [x] Model warm-up on server start (eliminates cold-start latency)
+15. [x] Multiple Whisper model support (`?model=small|medium`)

@@ -32,8 +32,9 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git && \
     cmake -B build -DGGML_VULKAN=1 && \
     cmake --build build -j$(nproc)
 
-# Download whisper model (medium multilingual - better for mixed languages)
+# Download whisper models (small for speed, medium for accuracy)
 RUN cd /opt/whisper.cpp && \
+    ./models/download-ggml-model.sh small && \
     ./models/download-ggml-model.sh medium
 
 # Set up Python environment
@@ -53,7 +54,8 @@ COPY server/ .
 
 # Environment variables for whisper.cpp
 ENV WHISPER_CLI=/opt/whisper.cpp/build/bin/whisper-cli
-ENV WHISPER_MODEL=/opt/whisper.cpp/models/ggml-medium.bin
+ENV WHISPER_MODEL_DIR=/opt/whisper.cpp/models
+ENV WHISPER_DEFAULT_MODEL=medium
 
 EXPOSE 5000
 

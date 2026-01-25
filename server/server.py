@@ -5,10 +5,12 @@ import tempfile
 from contextvars import ContextVar
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
-from transcriber import transcribe
+from transcriber import transcribe, warmup, list_models, AVAILABLE_MODELS, WHISPER_DEFAULT_MODEL
 
 # Per-request log capture
 request_logs: ContextVar[list[str]] = ContextVar("request_logs", default=[])
@@ -41,10 +43,32 @@ logger.addHandler(console_handler)
 # 25 MB limit (~5 min of 48kHz stereo audio)
 MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup: warm up the model
+    warmup_logger = logging.getLogger("vox.warmup")
+    warmup_logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
+    warmup_logger.addHandler(handler)
+
+    result = warmup(logger=warmup_logger)
+    if result["success"]:
+        warmup_logger.info(f"Server ready (model loaded in {result['duration_ms']}ms)")
+    else:
+        warmup_logger.warning(f"Model warm-up failed: {result.get('error', 'unknown error')}")
+
+    yield
+    # Shutdown: nothing to clean up
+
+
 app = FastAPI(
     title="Vox",
     description="Voice transcription service using whisper.cpp with Vulkan GPU acceleration",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -67,12 +91,24 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/models")
+async def get_models():
+    """List available Whisper models."""
+    models = list_models()
+    return {
+        "default": WHISPER_DEFAULT_MODEL,
+        "available": list(AVAILABLE_MODELS),
+        "models": {name: {"size_bytes": size} for name, size in models.items()},
+    }
+
+
 @app.post("/transcribe")
 async def transcribe_audio(
     audio: UploadFile = File(...),
     debug: bool = Query(False, description="Include debug logs in response"),
     head: float | None = Query(None, gt=0, description="Transcribe only the first N seconds"),
     tail: float | None = Query(None, gt=0, description="Transcribe only the last N seconds"),
+    model: str | None = Query(None, description="Whisper model to use (small, medium). Default from server config."),
 ):
     """
     Transcribe uploaded audio file.
@@ -84,6 +120,7 @@ async def transcribe_audio(
     - ?debug=true - Include processing logs in response
     - ?head=10 - Transcribe only the first 10 seconds
     - ?tail=10 - Transcribe only the last 10 seconds
+    - ?model=small - Use specific model (small, medium)
     """
     # Initialize per-request log capture
     logs = []
@@ -93,11 +130,20 @@ async def transcribe_audio(
     if head is not None and tail is not None:
         raise HTTPException(status_code=400, detail="Cannot specify both 'head' and 'tail'")
 
+    # Validate model
+    if model is not None and model.lower() not in AVAILABLE_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model}' not available. Choose from: {', '.join(sorted(AVAILABLE_MODELS))}"
+        )
+
     # Validate file
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
     logger.info(f"Received file: {audio.filename}")
+    if model is not None:
+        logger.info(f"Model override: {model}")
     if head is not None:
         logger.info(f"Segment: head={head}s")
     elif tail is not None:
@@ -116,7 +162,7 @@ async def transcribe_audio(
             logger.info(f"Saved {len(content)} bytes to {tmp_path}")
 
             # Transcribe
-            result = transcribe(tmp_path, logger=logger, head=head, tail=tail)
+            result = transcribe(tmp_path, logger=logger, head=head, tail=tail, model=model)
 
             if debug:
                 result["logs"] = logs
