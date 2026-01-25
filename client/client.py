@@ -298,14 +298,15 @@ def transcribe(audio: np.ndarray, server_url: str) -> dict:
 
 def copy_to_clipboard(text: str):
     """Copy text to clipboard (Wayland + XWayland)."""
-    # Wayland native
+    # Wayland native - must complete before paste
     try:
-        subprocess.Popen(
+        subprocess.run(
             ["wl-copy", "--type", "text/plain", "--", text],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=2,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
     # XWayland (for Electron apps like Cursor)
@@ -316,8 +317,8 @@ def copy_to_clipboard(text: str):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        proc.communicate(input=text.encode("utf-8"))
-    except FileNotFoundError:
+        proc.communicate(input=text.encode("utf-8"), timeout=2)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
 
