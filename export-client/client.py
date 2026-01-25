@@ -7,7 +7,10 @@ Requires: User in 'input' group for evdev access
 """
 
 import argparse
+import atexit
+import fcntl
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -37,6 +40,44 @@ NOISE_GATE_REDUCTION = 0.1
 # Processing settings
 NORMALIZE_PEAK = 0.95
 DEFAULT_GAIN = 0.77
+
+# Lock file to prevent multiple instances
+LOCK_FILE = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "vox-client.lock"
+_lock_file_handle = None
+
+
+def acquire_lock() -> bool:
+    """Acquire exclusive lock to prevent multiple instances.
+
+    Returns:
+        True if lock acquired, False if another instance is running.
+    """
+    global _lock_file_handle
+    try:
+        _lock_file_handle = open(LOCK_FILE, "w")
+        fcntl.flock(_lock_file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_file_handle.write(str(os.getpid()))
+        _lock_file_handle.flush()
+        atexit.register(release_lock)
+        return True
+    except (IOError, OSError):
+        if _lock_file_handle:
+            _lock_file_handle.close()
+            _lock_file_handle = None
+        return False
+
+
+def release_lock():
+    """Release the lock file."""
+    global _lock_file_handle
+    if _lock_file_handle:
+        try:
+            fcntl.flock(_lock_file_handle, fcntl.LOCK_UN)
+            _lock_file_handle.close()
+            LOCK_FILE.unlink(missing_ok=True)
+        except (IOError, OSError):
+            pass
+        _lock_file_handle = None
 
 
 class AudioRecorder:
@@ -280,25 +321,33 @@ def copy_to_clipboard(text: str):
         pass
 
 
-def paste():
-    """Paste from clipboard using ydotool. Tries both Ctrl+V and Ctrl+Shift+V."""
+def paste(method: str = "shift"):
+    """Paste from clipboard using ydotool.
+
+    Args:
+        method: Paste method - 'shift' (Ctrl+Shift+V), 'standard' (Ctrl+V), or 'both'
+    """
     time.sleep(0.3)
     try:
-        # Ctrl+Shift+V for Electron apps (Cursor, VS Code)
-        subprocess.run(
-            ["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+shift+v"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-        )
-        time.sleep(0.15)
-        # Ctrl+V for regular apps (Notepad++, Wine, native apps)
-        subprocess.run(
-            ["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+v"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-        )
+        if method in ("shift", "both"):
+            # Ctrl+Shift+V for Electron apps (Cursor, VS Code) and plain text paste
+            subprocess.run(
+                ["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+shift+v"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            if method == "both":
+                time.sleep(0.15)
+
+        if method in ("standard", "both"):
+            # Ctrl+V for regular apps (Notepad++, Wine, native apps)
+            subprocess.run(
+                ["ydotool", "key", "--delay", "150", "--key-delay", "50", "ctrl+v"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
     except FileNotFoundError:
         print("⚠️  ydotool not found, skipping auto-paste", file=sys.stderr)
     except subprocess.TimeoutExpired:
@@ -339,7 +388,7 @@ def find_keyboard() -> InputDevice | None:
     return None
 
 
-def run_client(server_url: str, device: int | None, auto_paste: bool):
+def run_client(server_url: str, device: int | None, auto_paste: bool, paste_method: str = "shift"):
     """Main client loop."""
     print(f"🌐 Server: {server_url}")
     print("🔍 Finding keyboard...")
@@ -424,7 +473,7 @@ def run_client(server_url: str, device: int | None, auto_paste: bool):
                                     # Copy and paste (add trailing space for follow-up text)
                                     copy_to_clipboard(text + " ")
                                     if auto_paste:
-                                        paste()
+                                        paste(paste_method)
                                 else:
                                     print("\r📝 (no speech detected)\n")
 
@@ -481,6 +530,12 @@ def main():
         action="store_true",
         help="List audio input devices and exit",
     )
+    parser.add_argument(
+        "--paste-method",
+        choices=["shift", "standard", "both"],
+        default="shift",
+        help="Paste method: 'shift' (Ctrl+Shift+V, default), 'standard' (Ctrl+V), 'both' (old behavior)",
+    )
 
     args = parser.parse_args()
 
@@ -492,10 +547,17 @@ def main():
                 print(f"  {i}: {dev['name']}")
         return
 
+    if not acquire_lock():
+        print("❌ Another instance of Vox client is already running.", file=sys.stderr)
+        print(f"   Lock file: {LOCK_FILE}", file=sys.stderr)
+        print("   Stop the other instance first, or delete the lock file if it's stale.", file=sys.stderr)
+        sys.exit(1)
+
     run_client(
         server_url=args.server,
         device=args.device,
         auto_paste=not args.no_paste,
+        paste_method=args.paste_method,
     )
 
 
