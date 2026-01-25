@@ -1,5 +1,8 @@
+name: vox
+
 services:
   vox:
+    container_name: vox
     build:
       context: ..
       dockerfile: docker/Dockerfile
