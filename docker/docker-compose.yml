@@ -15,3 +15,12 @@ services:
       - "44"    # video
       - "991"   # render
     restart: unless-stopped
+    environment:
+      # Watchdog configuration
+      WATCHDOG_N8N_WEBHOOK_URL: "https://n8n.toyber.us/webhook/h3THKz0peMRf13xo-alert-dispatcher"
+      # WATCHDOG_HEALTH_INTERVAL: "30"
+      # WATCHDOG_RESOURCE_INTERVAL: "60"
+      # WATCHDOG_CPU_THRESHOLD: "90"
+      # WATCHDOG_MEMORY_THRESHOLD: "85"
+      # WATCHDOG_ALERT_COOLDOWN: "300"
+      # WATCHDOG_HEALTH_FAILURE_THRESHOLD: "3"

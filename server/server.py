@@ -11,6 +11,8 @@ from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from transcriber import transcribe, warmup, list_models, AVAILABLE_MODELS, WHISPER_DEFAULT_MODEL
+from watchdog import WatchdogService
+from watchdog_config import WatchdogConfig
 
 # Per-request log capture
 request_logs: ContextVar[list[str]] = ContextVar("request_logs", default=[])
@@ -60,8 +62,15 @@ async def lifespan(app: FastAPI):
     else:
         warmup_logger.warning(f"Model warm-up failed: {result.get('error', 'unknown error')}")
 
+    # Start watchdog service
+    watchdog_config = WatchdogConfig.from_env()
+    watchdog = WatchdogService(watchdog_config)
+    await watchdog.start()
+
     yield
-    # Shutdown: nothing to clean up
+
+    # Shutdown: stop watchdog
+    await watchdog.stop()
 
 
 app = FastAPI(
