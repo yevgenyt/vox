@@ -10,7 +10,7 @@ import psutil
 
 from watchdog_config import WatchdogConfig
 
-logger = logging.getLogger("vox.watchdog")
+logger = logging.getLogger("voxbox.watchdog")
 
 
 class AlertType(str, Enum):
@@ -199,7 +199,7 @@ class WatchdogService:
 
         payload = {
             "alert_type": alert_type.value,
-            "service": "vox-transcriber",
+            "service": "voxbox",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "details": details,
         }

@@ -1,5 +1,5 @@
 {
-  "name": "Vox Transcription",
+  "name": "Voxbox Transcription",
   "nodes": [
     {
       "parameters": {
@@ -14,7 +14,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [250, 300],
-      "webhookId": "vox-transcribe"
+      "webhookId": "voxbox-transcribe"
     },
     {
       "parameters": {
@@ -36,7 +36,7 @@
         }
       },
       "id": "http-request",
-      "name": "Vox Transcribe",
+      "name": "Voxbox Transcribe",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [480, 300]
@@ -73,14 +73,14 @@
       "main": [
         [
           {
-            "node": "Vox Transcribe",
+            "node": "Voxbox Transcribe",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Vox Transcribe": {
+    "Voxbox Transcribe": {
       "main": [
         [
           {

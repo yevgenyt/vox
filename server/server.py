@@ -30,7 +30,7 @@ class RequestLogHandler(logging.Handler):
 
 
 # Configure logging
-logger = logging.getLogger("vox")
+logger = logging.getLogger("voxbox")
 logger.setLevel(logging.DEBUG)
 handler = RequestLogHandler()
 handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
@@ -50,7 +50,7 @@ MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup: warm up the model
-    warmup_logger = logging.getLogger("vox.warmup")
+    warmup_logger = logging.getLogger("voxbox.warmup")
     warmup_logger.setLevel(logging.INFO)
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"))
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Vox",
+    title="Voxbox",
     description="Voice transcription service using whisper.cpp with Vulkan GPU acceleration",
     version="1.0.0",
     lifespan=lifespan,

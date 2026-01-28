@@ -1,8 +1,8 @@
-name: vox
+name: voxbox
 
 services:
-  vox:
-    container_name: vox
+  voxbox:
+    container_name: voxbox
     build:
       context: ..
       dockerfile: docker/Dockerfile
