@@ -13,6 +13,10 @@ from fastapi.responses import JSONResponse
 from transcriber import transcribe, warmup, list_models, AVAILABLE_MODELS, WHISPER_DEFAULT_MODEL
 from watchdog import WatchdogService
 from watchdog_config import WatchdogConfig
+from stats import transcriber_stats
+
+# Global watchdog instance for test-alert endpoint
+_watchdog: WatchdogService | None = None
 
 # Per-request log capture
 request_logs: ContextVar[list[str]] = ContextVar("request_logs", default=[])
@@ -63,14 +67,16 @@ async def lifespan(app: FastAPI):
         warmup_logger.warning(f"Model warm-up failed: {result.get('error', 'unknown error')}")
 
     # Start watchdog service
+    global _watchdog
     watchdog_config = WatchdogConfig.from_env()
-    watchdog = WatchdogService(watchdog_config)
-    await watchdog.start()
+    _watchdog = WatchdogService(watchdog_config)
+    await _watchdog.start()
 
     yield
 
     # Shutdown: stop watchdog
-    await watchdog.stop()
+    await _watchdog.stop()
+    _watchdog = None
 
 
 app = FastAPI(
@@ -98,6 +104,26 @@ async def limit_upload_size(request: Request, call_next):
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/stats")
+async def stats():
+    """Get transcriber statistics."""
+    return transcriber_stats.get_stats()
+
+
+@app.post("/test-alert")
+async def test_alert(message: str = Query("Test alert from voxbox", description="Custom message for the test alert")):
+    """Send a test alert to verify N8N webhook connectivity."""
+    if _watchdog is None:
+        raise HTTPException(status_code=503, detail="Watchdog service not initialized")
+
+    result = await _watchdog.send_test_alert(message)
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return result
 
 
 @app.get("/models")
@@ -170,8 +196,14 @@ async def transcribe_audio(
             tmp.flush()
             logger.info(f"Saved {len(content)} bytes to {tmp_path}")
 
-            # Transcribe
-            result = transcribe(tmp_path, logger=logger, head=head, tail=tail, model=model)
+            # Transcribe with stats tracking
+            transcriber_stats.start_transcription()
+            try:
+                result = transcribe(tmp_path, logger=logger, head=head, tail=tail, model=model)
+                transcriber_stats.end_transcription(result["duration_ms"], success=True)
+            except Exception:
+                transcriber_stats.end_transcription(0, success=False)
+                raise
 
             if debug:
                 result["logs"] = logs

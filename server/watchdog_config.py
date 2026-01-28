@@ -14,6 +14,7 @@ class WatchdogConfig:
     # Intervals (seconds)
     health_interval: int = 30
     resource_interval: int = 60
+    stats_interval: int = 60  # Transcriber utilization logging
 
     # Thresholds (percentages)
     cpu_threshold: int = 90
@@ -30,6 +31,7 @@ class WatchdogConfig:
             n8n_webhook_url=os.environ.get("WATCHDOG_N8N_WEBHOOK_URL"),
             health_interval=int(os.environ.get("WATCHDOG_HEALTH_INTERVAL", "30")),
             resource_interval=int(os.environ.get("WATCHDOG_RESOURCE_INTERVAL", "60")),
+            stats_interval=int(os.environ.get("WATCHDOG_STATS_INTERVAL", "60")),
             cpu_threshold=int(os.environ.get("WATCHDOG_CPU_THRESHOLD", "90")),
             memory_threshold=int(os.environ.get("WATCHDOG_MEMORY_THRESHOLD", "85")),
             alert_cooldown=int(os.environ.get("WATCHDOG_ALERT_COOLDOWN", "300")),
