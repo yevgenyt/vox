@@ -32,10 +32,11 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git && \
     cmake -B build -DGGML_VULKAN=1 && \
     cmake --build build -j$(nproc)
 
-# Download whisper models (small for speed, medium for accuracy)
+# Download whisper models (small for speed, medium for accuracy, small.en for English-only)
 RUN cd /opt/whisper.cpp && \
     ./models/download-ggml-model.sh small && \
-    ./models/download-ggml-model.sh medium
+    ./models/download-ggml-model.sh medium && \
+    ./models/download-ggml-model.sh small.en
 
 # Set up Python environment
 WORKDIR /app

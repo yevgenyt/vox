@@ -139,23 +139,28 @@ async def get_models():
 
 @app.post("/transcribe")
 async def transcribe_audio(
-    audio: UploadFile = File(...),
     debug: bool = Query(False, description="Include debug logs in response"),
     head: float | None = Query(None, gt=0, description="Transcribe only the first N seconds"),
     tail: float | None = Query(None, gt=0, description="Transcribe only the last N seconds"),
-    model: str | None = Query(None, description="Whisper model to use (small, medium). Default from server config."),
+    model: str | None = Query(None, description="Whisper model to use (small, small.en, medium). Default from server config."),
+    audio: UploadFile = File(..., description="Audio file to transcribe"),
 ):
     """
     Transcribe uploaded audio file.
 
-    Accepts audio file (WAV preferred, 16kHz mono recommended).
-    Returns transcribed text with detected language.
+    Query Parameters (all optional, order-independent):
+    - debug: bool - Include processing logs in response (default: false)
+    - head: float - Transcribe only the first N seconds (mutually exclusive with tail)
+    - tail: float - Transcribe only the last N seconds (mutually exclusive with head)
+    - model: str - Whisper model to use: small, small.en, medium (default: from server config)
 
-    Options:
-    - ?debug=true - Include processing logs in response
-    - ?head=10 - Transcribe only the first 10 seconds
-    - ?tail=10 - Transcribe only the last 10 seconds
-    - ?model=small - Use specific model (small, medium)
+    Form Data (required):
+    - audio: file - Audio file to transcribe (WAV preferred, 16kHz mono recommended)
+                    Supported: WAV, MP3, OGG, FLAC, M4A, AAC, OPUS, WebM
+                    Max size: 25 MB
+
+    Returns:
+    - JSON with keys: text, language, duration_ms, model
     """
     # Initialize per-request log capture
     logs = []

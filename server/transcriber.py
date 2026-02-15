@@ -14,7 +14,7 @@ WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models
 WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "medium")
 
 # Available models (must be downloaded in Dockerfile)
-AVAILABLE_MODELS = {"small", "medium"}
+AVAILABLE_MODELS = {"small", "medium", "small.en"}
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
@@ -26,7 +26,7 @@ def get_model_path(model: str | None = None) -> Path:
     Get the path to a Whisper model file.
 
     Args:
-        model: Model name (tiny, base, small, medium, large) or None for default
+        model: Model name (tiny, base, small, small.en, medium, large) or None for default
 
     Returns:
         Path to the model file
@@ -156,7 +156,7 @@ def transcribe(
         logger: Optional logger for debug output
         head: Extract and transcribe only the first N seconds
         tail: Extract and transcribe only the last N seconds
-        model: Whisper model to use (small, medium) or None for default
+        model: Whisper model to use (small, small.en, medium) or None for default
 
     Returns:
         dict with keys: text, language, duration_ms, model
