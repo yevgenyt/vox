@@ -217,7 +217,7 @@ def transcribe(
                 "-np",          # No prints (clean output)
             ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         duration_ms = int((time.time() - start_time) * 1000)
 
         if result.returncode != 0:

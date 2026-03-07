@@ -46,8 +46,8 @@ console_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(mess
 logger.addHandler(console_handler)
 
 
-# 25 MB limit (~5 min of 48kHz stereo audio)
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+# 200 MB limit (~2 hours of 16kHz mono WAV)
+MAX_UPLOAD_SIZE = 200 * 1024 * 1024
 
 
 @asynccontextmanager
