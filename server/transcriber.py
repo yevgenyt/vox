@@ -5,6 +5,7 @@ import os
 import struct
 import subprocess
 import tempfile
+import json
 import time
 from pathlib import Path
 
@@ -147,6 +148,7 @@ def transcribe(
     head: float | None = None,
     tail: float | None = None,
     model: str | None = None,
+    timestamps: bool = False,
 ) -> dict:
     """
     Transcribe audio file using whisper.cpp.
@@ -157,9 +159,11 @@ def transcribe(
         head: Extract and transcribe only the first N seconds
         tail: Extract and transcribe only the last N seconds
         model: Whisper model to use (small, small.en, medium) or None for default
+        timestamps: If True, return timed segments instead of plain text
 
     Returns:
         dict with keys: text, language, duration_ms, model
+        If timestamps=True, adds: segments [{text, start, end}]
     """
     if logger is None:
         logger = _null_logger
@@ -189,50 +193,86 @@ def transcribe(
         logger.info(f"Running whisper-cli with model {model_name}")
         start_time = time.time()
 
-        # Run whisper-cli
-        result = subprocess.run(
-            [
+        # Build whisper-cli command
+        json_out_path = None
+        if timestamps:
+            json_out_path = audio_path.with_suffix("")
+            cmd = [
                 WHISPER_CLI,
                 "-m", str(model_path),
                 "-f", str(audio_path),
-                "-l", "auto",   # Auto-detect language
-                "-bs", "1",     # Greedy decoding (faster)
+                "-l", "auto",
+                "-bs", "1",
+                "-oj",                          # JSON output (writes .json file)
+                "-of", str(json_out_path),      # Output file prefix
+            ]
+        else:
+            cmd = [
+                WHISPER_CLI,
+                "-m", str(model_path),
+                "-f", str(audio_path),
+                "-l", "auto",
+                "-bs", "1",
                 "-nt",          # No timestamps
                 "-np",          # No prints (clean output)
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+            ]
 
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         duration_ms = int((time.time() - start_time) * 1000)
 
         if result.returncode != 0:
             logger.error(f"whisper-cli failed (exit {result.returncode}): {result.stderr}")
             raise RuntimeError(f"whisper-cli failed: {result.stderr}")
 
-        # Parse output - whisper-cli outputs text directly with -np flag
-        text = result.stdout.strip()
-
-        # Detect language from stderr (whisper prints "auto-detected language: xx")
+        # Detect language from stderr
         language = "unknown"
         for line in result.stderr.split("\n"):
             if "auto-detected language:" in line.lower():
-                # Extract language code
                 parts = line.split(":")
                 if len(parts) >= 2:
                     language = parts[-1].strip().split()[0].lower()
                 break
 
+        # Parse output
+        segments = None
+        if timestamps and json_out_path:
+            json_file = Path(str(json_out_path) + ".json")
+            try:
+                with open(json_file) as jf:
+                    whisper_json = json.load(jf)
+                segments = []
+                full_text_parts = []
+                for seg in whisper_json.get("transcription", []):
+                    seg_text = seg.get("text", "").strip()
+                    offsets = seg.get("offsets", {})
+                    start_ms = offsets.get("from", 0)
+                    end_ms = offsets.get("to", 0)
+                    segments.append({
+                        "text": seg_text,
+                        "start": start_ms / 1000.0,
+                        "end": end_ms / 1000.0,
+                    })
+                    full_text_parts.append(seg_text)
+                text = " ".join(full_text_parts)
+                if whisper_json.get("result", {}).get("language"):
+                    language = whisper_json["result"]["language"]
+            finally:
+                json_file.unlink(missing_ok=True)
+        else:
+            text = result.stdout.strip()
+
         logger.info(f"Transcribed in {duration_ms}ms, model={model_name}, language={language}, text_len={len(text)}")
         logger.debug(f"whisper stderr: {result.stderr[:500]}" if result.stderr else "whisper stderr: (empty)")
 
-        return {
+        resp = {
             "text": text,
             "language": language,
             "duration_ms": duration_ms,
             "model": model_name,
         }
+        if segments is not None:
+            resp["segments"] = segments
+        return resp
 
     finally:
         # Clean up temporary files

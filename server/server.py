@@ -143,6 +143,7 @@ async def transcribe_audio(
     head: float | None = Query(None, gt=0, description="Transcribe only the first N seconds"),
     tail: float | None = Query(None, gt=0, description="Transcribe only the last N seconds"),
     model: str | None = Query(None, description="Whisper model to use (small, small.en, medium). Default from server config."),
+    timestamps: bool = Query(False, description="Return timed segments [{text, start, end}] in response"),
     audio: UploadFile = File(..., description="Audio file to transcribe"),
 ):
     """
@@ -204,7 +205,7 @@ async def transcribe_audio(
             # Transcribe with stats tracking
             transcriber_stats.start_transcription()
             try:
-                result = transcribe(tmp_path, logger=logger, head=head, tail=tail, model=model)
+                result = transcribe(tmp_path, logger=logger, head=head, tail=tail, model=model, timestamps=timestamps)
                 transcriber_stats.end_transcription(result["duration_ms"], success=True)
             except Exception:
                 transcriber_stats.end_transcription(0, success=False)
