@@ -15,7 +15,7 @@ WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models
 WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "medium")
 
 # Available models (must be downloaded in Dockerfile)
-AVAILABLE_MODELS = {"small", "medium", "small.en"}
+AVAILABLE_MODELS = {"small", "small.en", "medium", "large-v3-turbo"}
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")

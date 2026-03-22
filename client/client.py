@@ -9,13 +9,17 @@ Requires: User in 'input' group for evdev access
 import argparse
 import atexit
 import fcntl
+import gc
 import io
 import os
+import resource
+import signal
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import traceback
 import wave
 from pathlib import Path
 
@@ -44,6 +48,36 @@ DEFAULT_GAIN = 0.77
 # Lock file to prevent multiple instances
 LOCK_FILE = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "vox-client.lock"
 _lock_file_handle = None
+
+
+def _get_memory_mb() -> float:
+    """Get current RSS memory usage in MB."""
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    return usage.ru_maxrss / 1024  # ru_maxrss is in KB on Linux
+
+
+def _log_memory(context: str = ""):
+    """Log memory usage with context."""
+    mem_mb = _get_memory_mb()
+    prefix = f"[{context}] " if context else ""
+    print(f"📈 {prefix}Memory: {mem_mb:.1f}MB", file=sys.stderr, flush=True)
+
+
+def _signal_handler(signum, frame):
+    """Log signal receipt before exiting."""
+    sig_name = signal.Signals(signum).name
+    print(f"\n⚠️  Received {sig_name} (signal {signum})", file=sys.stderr)
+    print(f"   Stack trace:", file=sys.stderr)
+    traceback.print_stack(frame, file=sys.stderr)
+    print(f"   Exiting gracefully...", file=sys.stderr)
+    sys.exit(0)
+
+
+def _setup_signal_handlers():
+    """Set up handlers for termination signals."""
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGHUP, _signal_handler)
 
 
 def acquire_lock() -> bool:
@@ -480,6 +514,11 @@ def run_client(server_url: str, device: int | None, auto_paste: bool, paste_meth
 
                             except requests.RequestException as e:
                                 print(f"\r❌ Error: {e}\n", file=sys.stderr)
+                            finally:
+                                # Free memory after transcription
+                                del audio, processed
+                                gc.collect()
+                                _log_memory("post-transcribe")
 
         except OSError as e:
             # Keyboard disconnected
@@ -509,6 +548,8 @@ def run_client(server_url: str, device: int | None, auto_paste: bool, paste_meth
 
 
 def main():
+    _setup_signal_handlers()
+
     parser = argparse.ArgumentParser(description="Vox - Voice transcription client")
     parser.add_argument(
         "--server",

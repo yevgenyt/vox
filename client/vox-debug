@@ -1,0 +1,53 @@
+#!/bin/bash
+# Debug wrapper for vox client - monitors for SIGKILL
+
+cd "$(dirname "$(readlink -f "$0")")"
+
+echo "=== Vox Debug Monitor ==="
+echo "Starting vox client with monitoring..."
+echo "PID will be logged. If killed, check: journalctl -k | tail -20"
+echo ""
+
+# Start the client in background and get PID
+./venv/bin/python -u client.py --server http://127.0.0.1:5000 "$@" &
+VOX_PID=$!
+
+echo "Vox PID: $VOX_PID"
+echo "Monitoring... (Ctrl+C to stop)"
+echo ""
+
+# Monitor the process
+while kill -0 $VOX_PID 2>/dev/null; do
+    sleep 1
+done
+
+# Process died - check how
+wait $VOX_PID
+EXIT_CODE=$?
+
+echo ""
+echo "=== Vox client died ==="
+echo "Exit code: $EXIT_CODE"
+echo "Time: $(date)"
+
+# Exit code 137 = 128 + 9 = SIGKILL
+# Exit code 143 = 128 + 15 = SIGTERM
+if [ $EXIT_CODE -eq 137 ]; then
+    echo "SIGKILL (137) - Process was forcibly killed"
+    echo ""
+    echo "Checking kernel logs for OOM..."
+    journalctl -k --since "1 minute ago" | grep -i -E "(oom|kill)" || echo "No OOM messages found"
+    echo ""
+    echo "Checking systemd-oomd..."
+    journalctl -u systemd-oomd --since "1 minute ago" | tail -5
+elif [ $EXIT_CODE -eq 143 ]; then
+    echo "SIGTERM (143) - Process received termination request"
+elif [ $EXIT_CODE -eq 130 ]; then
+    echo "SIGINT (130) - Ctrl+C"
+else
+    echo "Unknown exit reason"
+fi
+
+echo ""
+echo "Memory info at time of death:"
+free -h
