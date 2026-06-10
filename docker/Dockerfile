@@ -27,12 +27,12 @@ RUN apt-get update && apt-get install -y \
 
 # Build whisper.cpp with Vulkan
 WORKDIR /opt
-RUN git clone https://github.com/ggerganov/whisper.cpp.git && \
+RUN git clone --branch v1.8.6 --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
     cd whisper.cpp && \
     cmake -B build -DGGML_VULKAN=1 && \
     cmake --build build -j$(nproc)
 
-# Download whisper models (small for speed, medium for accuracy, large-v3-turbo for best multilingual)
+# Download whisper models (small for speed, medium for accuracy, small.en for English-only, large-v3-turbo for quality)
 RUN cd /opt/whisper.cpp && \
     ./models/download-ggml-model.sh small && \
     ./models/download-ggml-model.sh small.en && \

@@ -12,10 +12,10 @@ from pathlib import Path
 
 WHISPER_CLI = os.environ.get("WHISPER_CLI", "/opt/whisper.cpp/build/bin/whisper-cli")
 WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models")
-WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "medium")
+WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "large-v3-turbo")
 
 # Available models (must be downloaded in Dockerfile)
-AVAILABLE_MODELS = {"small", "small.en", "medium", "large-v3-turbo"}
+AVAILABLE_MODELS = {"small", "medium", "small.en", "large-v3-turbo"}
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
@@ -177,15 +177,22 @@ def transcribe(
     logger.info(f"Processing {audio_path} ({audio_path.stat().st_size} bytes)")
 
     try:
-        # Convert to WAV if needed
-        if audio_path.suffix.lower() in NEEDS_CONVERSION:
-            audio_path = convert_to_wav(audio_path, logger)
-            files_to_cleanup.append(audio_path)
+        needs_conversion = audio_path.suffix.lower() in NEEDS_CONVERSION
 
-        # Extract segment if head/tail specified
-        if head is not None or tail is not None:
+        # For compressed formats with segment extraction: extract first, then convert.
+        # This avoids decoding the full multi-minute file when only a few seconds are needed.
+        if needs_conversion and (head is not None or tail is not None):
             audio_path = extract_segment(audio_path, head, tail, logger)
             files_to_cleanup.append(audio_path)
+            audio_path = convert_to_wav(audio_path, logger)
+            files_to_cleanup.append(audio_path)
+        else:
+            if needs_conversion:
+                audio_path = convert_to_wav(audio_path, logger)
+                files_to_cleanup.append(audio_path)
+            if head is not None or tail is not None:
+                audio_path = extract_segment(audio_path, head, tail, logger)
+                files_to_cleanup.append(audio_path)
 
         # Get model path (validates model name)
         model_path = get_model_path(model)
