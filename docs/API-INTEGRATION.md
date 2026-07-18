@@ -6,6 +6,7 @@ API documentation for external clients connecting to the Vox transcription servi
 
 | Setting | Value |
 |---------|-------|
+| **Host** | `donkey` (AMD Radeon 890M iGPU, Vulkan) |
 | **Tailscale IP** | `100.74.245.36` |
 | **Port** | `5000` |
 | **Base URL** | `http://100.74.245.36:5000` |
@@ -57,6 +58,8 @@ POST /transcribe?tail=15
 | `debug` | boolean | `false` | Include server-side processing logs in response |
 | `head` | float | `null` | Transcribe only the first N seconds |
 | `tail` | float | `null` | Transcribe only the last N seconds |
+| `model` | string | `large-v3-turbo-q8_0` | Model to use: `small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0` |
+| `timestamps` | boolean | `false` | Return per-segment text with start/end times |
 
 **Note**: `head` and `tail` are mutually exclusive - you cannot specify both.
 
@@ -75,7 +78,8 @@ POST /transcribe?tail=15
 {
   "text": "Transcribed text here.",
   "language": "en",
-  "duration_ms": 1234
+  "duration_ms": 1234,
+  "model": "large-v3-turbo-q8_0"
 }
 ```
 
@@ -85,6 +89,8 @@ POST /transcribe?tail=15
 | `text` | string | Transcribed text |
 | `language` | string | Detected language code (e.g., "en", "de", "es") |
 | `duration_ms` | integer | Processing time in milliseconds |
+| `model` | string | Model used for this request |
+| `segments` | array | *(Only with `?timestamps=true`)* Per-segment `{text, start, end}` objects |
 | `logs` | array | *(Only with `?debug=true`)* Server-side processing logs |
 
 ---
@@ -119,7 +125,7 @@ def transcribe(audio_path: str) -> dict:
         response = requests.post(
             url,
             files={"audio": f},
-            timeout=120
+            timeout=600
         )
 
     response.raise_for_status()
@@ -146,7 +152,7 @@ async function transcribe(audioPath) {
     form,
     {
       headers: form.getHeaders(),
-      timeout: 120000
+      timeout: 600000
     }
   );
 
@@ -180,8 +186,8 @@ For n8n integration, use the HTTP Request node:
 
 | Limit | Value |
 |-------|-------|
-| Max file size | 25 MB |
-| Request timeout | 120 seconds |
+| Max file size | 200 MB (~2 hours of 16kHz mono WAV) |
+| Request timeout | 600 seconds |
 
 ---
 
@@ -190,7 +196,7 @@ For n8n integration, use the HTTP Request node:
 | Status | Meaning |
 |--------|---------|
 | 400 | Bad request (missing or invalid file) |
-| 413 | File too large (>25 MB) |
+| 413 | File too large (>200 MB) |
 | 422 | Validation error (missing `audio` field) |
 | 500 | Server error (transcription failed) |
 

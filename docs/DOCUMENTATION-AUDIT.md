@@ -1,5 +1,14 @@
 # Vox Documentation Audit Report
 
+> ⚠️ **SUPERSEDED — historical snapshot (2026-01-24).** This report reflects the
+> project as it stood on its audit date and is kept for history only. Its
+> "Current" / "no obsolete information" assessments are no longer accurate: the
+> service has since moved to the `large-v3-turbo-q8_0` default model, an Ubuntu
+> 26.04 / Mesa 26.0.3 container, a 200 MB / 600s limit, and a watchdog with
+> retrying webhook delivery. It also references a `docs/TODO.md` that no longer
+> exists. For current state see [PROJECT.md](../PROJECT.md) and
+> [API-INTEGRATION.md](API-INTEGRATION.md). Do not treat this file as live status.
+
 **Date**: 2026-01-24
 **Auditor**: Documentation Steward
 **Project**: Vox Voice Transcription Server

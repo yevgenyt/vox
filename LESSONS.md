@@ -90,9 +90,9 @@ Use numeric group IDs, not names (container doesn't have render/video groups):
 ## Server Security
 
 ### File size limit
-25 MB limit covers ~5 min of 48kHz stereo audio:
+200 MB limit covers ~2 hours of 16kHz mono WAV (raised from an earlier 25 MB):
 ```python
-MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+MAX_UPLOAD_SIZE = 200 * 1024 * 1024
 
 @app.middleware("http")
 async def limit_upload_size(request: Request, call_next):

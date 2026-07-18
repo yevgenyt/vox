@@ -57,10 +57,13 @@ whisper-cli \
   -np            # No prints (clean output)
 ```
 
-**Models**:
+**Models** (this section documents the original host-side setup; the container
+now bundles the full roster — see the Components and API sections above):
+- `ggml-large-v3-turbo-q8_0.bin` - Multilingual, quantized (current default, recommended)
+- `ggml-large-v3-turbo.bin` - Multilingual, full-precision f16 (max fidelity)
+- `ggml-medium.bin` / `ggml-small.bin` - Smaller multilingual models
 - `ggml-small.en.bin` - English only, slightly faster
-- `ggml-small.bin` - Multilingual with auto-detection (recommended)
-- Location: `~/Applications/whisper.cpp/models/`
+- Location: `~/Applications/whisper.cpp/models/` (host) or `/opt/whisper.cpp/models/` (container)
 
 ### Audio Processing Lessons
 

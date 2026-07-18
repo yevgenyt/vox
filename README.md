@@ -129,7 +129,7 @@ Response with logs:
     "10:30:45 INFO Received file: recording.wav",
     "10:30:45 INFO Saved 12345 bytes to /tmp/tmpXXXX.wav",
     "10:30:45 INFO Processing /tmp/tmpXXXX.wav (12345 bytes)",
-    "10:30:45 INFO Running whisper-cli with model ggml-small.bin",
+    "10:30:45 INFO Running whisper-cli with model ggml-large-v3-turbo-q8_0.bin",
     "10:30:46 INFO Transcribed in 850ms, language=en, text_len=12"
   ]
 }
