@@ -14,8 +14,8 @@ WHISPER_CLI = os.environ.get("WHISPER_CLI", "/opt/whisper.cpp/build/bin/whisper-
 WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models")
 WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "large-v3-turbo")
 
-# Available models (must be downloaded in Dockerfile)
-AVAILABLE_MODELS = {"small", "medium", "small.en", "large-v3-turbo"}
+# Available models (must be downloaded/quantized in Dockerfile)
+AVAILABLE_MODELS = {"small", "medium", "small.en", "large-v3-turbo", "large-v3-turbo-q8_0"}
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
@@ -210,6 +210,8 @@ def transcribe(
                 "-f", str(audio_path),
                 "-l", "auto",
                 "-bs", "1",
+                "-fa",                          # Flash attention (Vulkan coopmat)
+                "-t", "8",                      # Threads for CPU-side ops (mel/sample)
                 "-oj",                          # JSON output (writes .json file)
                 "-of", str(json_out_path),      # Output file prefix
             ]
@@ -220,6 +222,8 @@ def transcribe(
                 "-f", str(audio_path),
                 "-l", "auto",
                 "-bs", "1",
+                "-fa",          # Flash attention (Vulkan coopmat)
+                "-t", "8",      # Threads for CPU-side ops (mel/sample)
                 "-nt",          # No timestamps
                 "-np",          # No prints (clean output)
             ]
@@ -358,6 +362,8 @@ def warmup(logger: logging.Logger = None, model: str | None = None) -> dict:
                 "-f", str(tmp_path),
                 "-l", "en",     # Skip auto-detect for faster warm-up
                 "-bs", "1",
+                "-fa",          # Flash attention (Vulkan coopmat)
+                "-t", "8",      # Threads for CPU-side ops (mel/sample)
                 "-nt",
                 "-np",
             ],
