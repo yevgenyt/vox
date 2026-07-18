@@ -24,6 +24,10 @@ class WatchdogConfig:
     alert_cooldown: int = 300  # seconds before re-alerting same issue
     health_failure_threshold: int = 3  # consecutive failures before alerting
 
+    # Webhook delivery resilience (n8n restarts/proxy hiccups return 502)
+    webhook_max_retries: int = 3  # total attempts per webhook POST
+    webhook_retry_backoff: float = 1.0  # base seconds, multiplied by attempt number
+
     @classmethod
     def from_env(cls) -> "WatchdogConfig":
         """Load configuration from environment variables."""
@@ -36,6 +40,8 @@ class WatchdogConfig:
             memory_threshold=int(os.environ.get("WATCHDOG_MEMORY_THRESHOLD", "85")),
             alert_cooldown=int(os.environ.get("WATCHDOG_ALERT_COOLDOWN", "300")),
             health_failure_threshold=int(os.environ.get("WATCHDOG_HEALTH_FAILURE_THRESHOLD", "3")),
+            webhook_max_retries=int(os.environ.get("WATCHDOG_WEBHOOK_MAX_RETRIES", "3")),
+            webhook_retry_backoff=float(os.environ.get("WATCHDOG_WEBHOOK_RETRY_BACKOFF", "1.0")),
         )
 
     @property

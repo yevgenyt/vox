@@ -151,6 +151,46 @@ class WatchdogService:
         except Exception as e:
             logger.warning(f"Failed to fetch stats: {e}")
 
+    async def _post_to_webhook(self, payload: dict) -> None:
+        """POST a payload to the n8n webhook, retrying transient failures.
+
+        n8n restarts and reverse-proxy hiccups surface as connection errors,
+        timeouts, or 5xx responses (commonly 502 Bad Gateway). A single attempt
+        drops the alert on any of these, so retry them with linear backoff. A
+        4xx response means the request itself is bad and won't succeed on retry,
+        so it is raised immediately. Raises the last error if every attempt fails.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(1, self.config.webhook_max_retries + 1):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        self.config.n8n_webhook_url,
+                        json=payload,
+                        timeout=10.0,
+                    )
+                if response.status_code >= 500:
+                    # Transient server-side error (n8n down/restarting) — retry
+                    last_exc = httpx.HTTPStatusError(
+                        f"HTTP {response.status_code} from webhook",
+                        request=response.request,
+                        response=response,
+                    )
+                else:
+                    response.raise_for_status()  # 4xx raises (not retried below)
+                    return
+            except httpx.HTTPStatusError:
+                raise  # 4xx client error — retrying won't help
+            except httpx.HTTPError as e:
+                # Connection error / timeout — retryable
+                last_exc = e
+
+            if attempt < self.config.webhook_max_retries:
+                await asyncio.sleep(self.config.webhook_retry_backoff * attempt)
+
+        assert last_exc is not None  # loop always sets it before falling through
+        raise last_exc
+
     async def _send_heartbeat(self, stats: dict):
         """Send stats heartbeat to n8n webhook (bypasses cooldown)."""
         status = "busy" if stats["is_busy"] else "idle"
@@ -172,13 +212,7 @@ class WatchdogService:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.config.n8n_webhook_url,
-                    json=payload,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
+            await self._post_to_webhook(payload)
             logger.debug("Heartbeat sent to webhook")
         except Exception as e:
             logger.warning(f"Failed to send heartbeat: {e}")
@@ -319,14 +353,7 @@ class WatchdogService:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.config.n8n_webhook_url,
-                    json=payload,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-
+            await self._post_to_webhook(payload)
             logger.info(f"Alert sent: {alert_type.value}")
             self._last_alert_time[alert_type] = datetime.now(timezone.utc).timestamp()
 
@@ -355,14 +382,7 @@ class WatchdogService:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.config.n8n_webhook_url,
-                    json=payload,
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-
+            await self._post_to_webhook(payload)
             logger.info(f"Test alert sent successfully")
             return {
                 "success": True,
