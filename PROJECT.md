@@ -26,7 +26,7 @@ A containerized transcription service that accepts audio and returns text, with 
 ### Server (Docker)
 - **API**: FastAPI with single `/transcribe` endpoint
 - **Transcription**: whisper.cpp with Vulkan GPU acceleration
-- **Model**: ggml-small.bin (multilingual, auto-detect language)
+- **Model**: ggml-large-v3-turbo-q8_0.bin (multilingual, auto-detect language) — q8_0 quantization runs ~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss; f16 stays available via `?model=large-v3-turbo`
 
 ### Client (Lightweight Python)
 - **Hotkey**: Left Alt + Right Alt (evdev)
@@ -219,7 +219,8 @@ vox/
 | `debug` | boolean | `false` | Include server-side processing logs in response |
 | `head` | float | `null` | Transcribe only the first N seconds |
 | `tail` | float | `null` | Transcribe only the last N seconds |
-| `model` | string | `medium` | Whisper model to use (`small`, `medium`) |
+| `model` | string | `large-v3-turbo-q8_0` | Whisper model to use (`small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0`) |
+| `timestamps` | boolean | `false` | Return per-segment text with start/end times |
 
 **Response**:
 ```json
@@ -227,7 +228,7 @@ vox/
   "text": "Transcribed text here.",
   "language": "en",
   "duration_ms": 1234,
-  "model": "medium"
+  "model": "large-v3-turbo-q8_0"
 }
 ```
 
@@ -250,6 +251,10 @@ curl -X POST "http://localhost:5000/transcribe?head=15" \
 # Use small model for faster transcription
 curl -X POST "http://localhost:5000/transcribe?model=small" \
   -F "audio=@recording.wav"
+
+# Use full-precision f16 turbo for maximum fidelity
+curl -X POST "http://localhost:5000/transcribe?model=large-v3-turbo" \
+  -F "audio=@recording.wav"
 ```
 
 ### GET /models
@@ -257,11 +262,14 @@ curl -X POST "http://localhost:5000/transcribe?model=small" \
 **Response**:
 ```json
 {
-  "default": "medium",
-  "available": ["small", "medium"],
+  "default": "large-v3-turbo-q8_0",
+  "available": ["small", "small.en", "medium", "large-v3-turbo", "large-v3-turbo-q8_0"],
   "models": {
-    "small": {"size_bytes": 488836321},
-    "medium": {"size_bytes": 1533774781}
+    "small": {"size_bytes": 487601967},
+    "small.en": {"size_bytes": 487614201},
+    "medium": {"size_bytes": 1533763059},
+    "large-v3-turbo": {"size_bytes": 1624555275},
+    "large-v3-turbo-q8_0": {"size_bytes": 874188075}
   }
 }
 ```
@@ -300,4 +308,8 @@ services:
 12. [x] API integration documentation for external clients
 13. [x] Sample n8n workflow for LAN integration
 14. [x] Model warm-up on server start (eliminates cold-start latency)
-15. [x] Multiple Whisper model support (`?model=small|medium`)
+15. [x] Multiple Whisper model support (`?model=...`)
+16. [x] Watchdog service: health/resource monitoring + heartbeat to n8n alert-dispatcher webhook
+17. [x] Ubuntu 26.04 container base for newer AMD RADV driver (Mesa 26.0.3, STRIX1 code path)
+18. [x] q8_0-quantized large-v3-turbo default + flash attention (`-fa`); ~22% faster on the 890M iGPU
+19. [x] Resilient webhook delivery: retry transient 5xx/timeouts so alerts survive n8n restarts
