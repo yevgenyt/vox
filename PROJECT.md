@@ -25,7 +25,7 @@ A containerized transcription service that accepts audio and returns text, with 
 
 ### Server (Docker)
 - **API**: FastAPI with single `/transcribe` endpoint
-- **Transcription**: whisper.cpp with Vulkan GPU acceleration
+- **Transcription**: whisper.cpp v1.9.3 with Vulkan GPU acceleration
 - **Model**: ggml-large-v3-turbo-q8_0.bin (multilingual, auto-detect language) — q8_0 quantization runs ~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss; f16 stays available via `?model=large-v3-turbo`
 
 ### Client (Lightweight Python)
@@ -316,3 +316,4 @@ services:
 17. [x] Ubuntu 26.04 container base for newer AMD RADV driver (Mesa 26.0.3, STRIX1 code path)
 18. [x] q8_0-quantized large-v3-turbo default + flash attention (`-fa`); ~22% faster on the 890M iGPU
 19. [x] Resilient webhook delivery: retry transient 5xx/timeouts so alerts survive n8n restarts
+20. [x] Bumped whisper.cpp to v1.9.3 — fixes a heap out-of-bounds read on very short audio clips and a stack-buffer-overflow on malformed model files, plus a Vulkan submission-batching fix relevant to the Radeon 890M iGPU backend

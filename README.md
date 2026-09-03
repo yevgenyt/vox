@@ -11,6 +11,13 @@ cd docker
 podman-compose up -d
 ```
 
+> **Redeploying after a rebuild:** `podman-compose up -d` alone does **not** pick up a
+> freshly rebuilt image if the container is already running — compose doesn't diff
+> image content, only its own config. After `podman-compose build`, redeploy with:
+> ```bash
+> podman-compose up -d --force-recreate
+> ```
+
 Or manually:
 ```bash
 podman build -t vox -f docker/Dockerfile .
