@@ -22,6 +22,11 @@ AVAILABLE_MODELS = {
 }
 
 
+# Parakeet can't return timed segments, so requests that need them and don't
+# name a model fall back to this Whisper model even when Parakeet is the default.
+TIMESTAMP_FALLBACK_MODEL = "large-v3-turbo-q8_0"
+
+
 def is_parakeet(model_name: str) -> bool:
     """Parakeet models run through parakeet-cli, not whisper-cli."""
     return model_name.startswith("parakeet")
@@ -203,6 +208,11 @@ def transcribe(
                 audio_path = extract_segment(audio_path, head, tail, logger)
                 files_to_cleanup.append(audio_path)
 
+        # Parakeet has no timestamps: an unspecified model falls back to Whisper
+        if timestamps and model is None and is_parakeet(WHISPER_DEFAULT_MODEL):
+            model = TIMESTAMP_FALLBACK_MODEL
+            logger.info(f"timestamps requested; using {model} instead of default {WHISPER_DEFAULT_MODEL}")
+
         # Get model path (validates model name)
         model_path = get_model_path(model)
         model_name = model_path.stem.replace("ggml-", "")
@@ -361,7 +371,7 @@ def warmup(logger: logging.Logger = None, model: str | None = None) -> dict:
 
     logger.info("Starting model warm-up...")
     logger.info(f"Model: {model_name} ({model_path})")
-    logger.info(f"CLI: {WHISPER_CLI}")
+    logger.info(f"CLI: {PARAKEET_CLI if is_parakeet(model_name) else WHISPER_CLI}")
 
     start_time = time.time()
 
@@ -374,8 +384,16 @@ def warmup(logger: logging.Logger = None, model: str | None = None) -> dict:
         logger.info(f"Created warm-up audio: {tmp_path} ({tmp_path.stat().st_size} bytes)")
 
         # Run transcription to load model into GPU memory
-        result = subprocess.run(
-            [
+        if is_parakeet(model_name):
+            warm_cmd = [
+                PARAKEET_CLI,
+                "-m", str(model_path),
+                "-f", str(tmp_path),
+                "-t", "8",
+                "-np",
+            ]
+        else:
+            warm_cmd = [
                 WHISPER_CLI,
                 "-m", str(model_path),
                 "-f", str(tmp_path),
@@ -385,11 +403,8 @@ def warmup(logger: logging.Logger = None, model: str | None = None) -> dict:
                 "-t", "8",      # Threads for CPU-side ops (mel/sample)
                 "-nt",
                 "-np",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+            ]
+        result = subprocess.run(warm_cmd, capture_output=True, text=True, timeout=120)
 
         duration_ms = int((time.time() - start_time) * 1000)
 

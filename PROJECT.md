@@ -26,7 +26,7 @@ A containerized transcription service that accepts audio and returns text, with 
 ### Server (Docker)
 - **API**: FastAPI with single `/transcribe` endpoint
 - **Transcription**: whisper.cpp v1.9.3 with Vulkan GPU acceleration
-- **Model**: ggml-large-v3-turbo-q8_0.bin (multilingual, auto-detect language) — q8_0 quantization runs ~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss; f16 stays available via `?model=large-v3-turbo`
+- **Model**: ggml-parakeet-tdt-0.6b-v3-q8_0.bin (NVIDIA Parakeet TDT 0.6B v3, multilingual, auto-detects language, no language override) via `parakeet-cli` — default since 2026-10-11. Whisper `large-v3-turbo-q8_0` stays available (~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss) and is used automatically when `timestamps=true` is requested without a `model`; f16 stays available via `?model=large-v3-turbo`
 
 ### Client (Lightweight Python)
 - **Hotkey**: Left Alt + Right Alt (evdev)
@@ -59,7 +59,8 @@ whisper-cli \
 
 **Models** (this section documents the original host-side setup; the container
 now bundles the full roster — see the Components and API sections above):
-- `ggml-large-v3-turbo-q8_0.bin` - Multilingual, quantized (current default, recommended)
+- `ggml-parakeet-tdt-0.6b-v3-q8_0.bin` - Parakeet, multilingual, quantized (current default; no timestamps, may render very short English clips in Cyrillic)
+- `ggml-large-v3-turbo-q8_0.bin` - Whisper multilingual, quantized (timestamps fallback; best language auto-detect)
 - `ggml-large-v3-turbo.bin` - Multilingual, full-precision f16 (max fidelity)
 - `ggml-medium.bin` / `ggml-small.bin` - Smaller multilingual models
 - `ggml-small.en.bin` - English only, slightly faster
@@ -222,7 +223,7 @@ vox/
 | `debug` | boolean | `false` | Include server-side processing logs in response |
 | `head` | float | `null` | Transcribe only the first N seconds |
 | `tail` | float | `null` | Transcribe only the last N seconds |
-| `model` | string | `large-v3-turbo-q8_0` | Model to use (`small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0`, `parakeet-tdt-0.6b-v3-q8_0`) |
+| `model` | string | `parakeet-tdt-0.6b-v3-q8_0` | Model to use (`small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0`, `parakeet-tdt-0.6b-v3-q8_0`) |
 | `timestamps` | boolean | `false` | Return per-segment text with start/end times (not supported for Parakeet; returns 400) |
 
 **Response**:
@@ -231,7 +232,7 @@ vox/
   "text": "Transcribed text here.",
   "language": "en",
   "duration_ms": 1234,
-  "model": "large-v3-turbo-q8_0"
+  "model": "parakeet-tdt-0.6b-v3-q8_0"
 }
 ```
 
@@ -265,7 +266,7 @@ curl -X POST "http://localhost:5000/transcribe?model=large-v3-turbo" \
 **Response**:
 ```json
 {
-  "default": "large-v3-turbo-q8_0",
+  "default": "parakeet-tdt-0.6b-v3-q8_0",
   "available": ["small", "small.en", "medium", "large-v3-turbo", "large-v3-turbo-q8_0", "parakeet-tdt-0.6b-v3-q8_0"],
   "models": {
     "small": {"size_bytes": 487601967},
@@ -318,4 +319,5 @@ services:
 18. [x] q8_0-quantized large-v3-turbo default + flash attention (`-fa`); ~22% faster on the 890M iGPU
 19. [x] Resilient webhook delivery: retry transient 5xx/timeouts so alerts survive n8n restarts
 20. [x] Bumped whisper.cpp to v1.9.3 — fixes a heap out-of-bounds read on very short audio clips and a stack-buffer-overflow on malformed model files, plus a Vulkan submission-batching fix relevant to the Radeon 890M iGPU backend
-21. [x] Opt-in NVIDIA Parakeet TDT 0.6B v3 (q8_0, official ggml-org conversion) via `?model=parakeet-tdt-0.6b-v3-q8_0`, run through `parakeet-cli`. ~0.9s vs ~2.0s for large-v3-turbo-q8_0 on an 11s clip (small.en ~0.7s). Multilingual, no language reporting, no `timestamps`. Not the default; accuracy vs Whisper on real dictation not yet evaluated
+21. [x] NVIDIA Parakeet TDT 0.6B v3 (now the default; see item 22) (q8_0, official ggml-org conversion) via `?model=parakeet-tdt-0.6b-v3-q8_0`, run through `parakeet-cli`. ~0.9s vs ~2.0s for large-v3-turbo-q8_0 on an 11s clip (small.en ~0.7s). Multilingual, no language reporting, no `timestamps`. Not the default; accuracy vs Whisper on real dictation not yet evaluated
+22. [x] Parakeet is the server default (2026-10-11). `timestamps=true` with no `model` falls back to `large-v3-turbo-q8_0`; explicit Parakeet + `timestamps=true` is a 400. Known issue: very short (<3 s) English clips can come out as Cyrillic transliteration ("Ласт экзекьюшен.") because v3 auto-detects language with no override; options are the English-only v2 (needs conversion) or forcing a Whisper model

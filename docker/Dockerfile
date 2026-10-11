@@ -51,8 +51,9 @@ RUN cd /opt/whisper.cpp && \
         models/ggml-large-v3-turbo-q8_0.bin q8_0
 
 # Parakeet TDT 0.6B v3 (NVIDIA, multilingual) as an opt-in model via
-# `?model=parakeet-tdt-0.6b-v3-q8_0`. Official ggml-org conversion; runs through
-# parakeet-cli (built above). ~2x faster than large-v3-turbo-q8_0 on the 890M.
+# `?model=parakeet-tdt-0.6b-v3-q8_0` and the server default. Official ggml-org
+# conversion; runs through parakeet-cli (built above). ~2x faster than
+# large-v3-turbo-q8_0 on the 890M. Needs timestamps? Falls back to Whisper.
 RUN curl -fL -o /opt/whisper.cpp/models/ggml-parakeet-tdt-0.6b-v3-q8_0.bin \
     https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-parakeet-tdt-0.6b-v3-q8_0.bin
 
@@ -75,7 +76,7 @@ COPY server/ .
 ENV WHISPER_CLI=/opt/whisper.cpp/build/bin/whisper-cli
 ENV PARAKEET_CLI=/opt/whisper.cpp/build/bin/parakeet-cli
 ENV WHISPER_MODEL_DIR=/opt/whisper.cpp/models
-ENV WHISPER_DEFAULT_MODEL=large-v3-turbo-q8_0
+ENV WHISPER_DEFAULT_MODEL=parakeet-tdt-0.6b-v3-q8_0
 
 EXPOSE 5000
 
