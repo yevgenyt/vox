@@ -222,8 +222,8 @@ vox/
 | `debug` | boolean | `false` | Include server-side processing logs in response |
 | `head` | float | `null` | Transcribe only the first N seconds |
 | `tail` | float | `null` | Transcribe only the last N seconds |
-| `model` | string | `large-v3-turbo-q8_0` | Whisper model to use (`small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0`) |
-| `timestamps` | boolean | `false` | Return per-segment text with start/end times |
+| `model` | string | `large-v3-turbo-q8_0` | Model to use (`small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0`, `parakeet-tdt-0.6b-v3-q8_0`) |
+| `timestamps` | boolean | `false` | Return per-segment text with start/end times (not supported for Parakeet; returns 400) |
 
 **Response**:
 ```json
@@ -266,13 +266,14 @@ curl -X POST "http://localhost:5000/transcribe?model=large-v3-turbo" \
 ```json
 {
   "default": "large-v3-turbo-q8_0",
-  "available": ["small", "small.en", "medium", "large-v3-turbo", "large-v3-turbo-q8_0"],
+  "available": ["small", "small.en", "medium", "large-v3-turbo", "large-v3-turbo-q8_0", "parakeet-tdt-0.6b-v3-q8_0"],
   "models": {
     "small": {"size_bytes": 487601967},
     "small.en": {"size_bytes": 487614201},
     "medium": {"size_bytes": 1533763059},
     "large-v3-turbo": {"size_bytes": 1624555275},
-    "large-v3-turbo-q8_0": {"size_bytes": 874188075}
+    "large-v3-turbo-q8_0": {"size_bytes": 874188075},
+    "parakeet-tdt-0.6b-v3-q8_0": {"size_bytes": 668757119}
   }
 }
 ```
@@ -317,3 +318,4 @@ services:
 18. [x] q8_0-quantized large-v3-turbo default + flash attention (`-fa`); ~22% faster on the 890M iGPU
 19. [x] Resilient webhook delivery: retry transient 5xx/timeouts so alerts survive n8n restarts
 20. [x] Bumped whisper.cpp to v1.9.3 — fixes a heap out-of-bounds read on very short audio clips and a stack-buffer-overflow on malformed model files, plus a Vulkan submission-batching fix relevant to the Radeon 890M iGPU backend
+21. [x] Opt-in NVIDIA Parakeet TDT 0.6B v3 (q8_0, official ggml-org conversion) via `?model=parakeet-tdt-0.6b-v3-q8_0`, run through `parakeet-cli`. ~0.9s vs ~2.0s for large-v3-turbo-q8_0 on an 11s clip (small.en ~0.7s). Multilingual, no language reporting, no `timestamps`. Not the default; accuracy vs Whisper on real dictation not yet evaluated

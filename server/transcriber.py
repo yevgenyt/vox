@@ -13,9 +13,18 @@ from pathlib import Path
 WHISPER_CLI = os.environ.get("WHISPER_CLI", "/opt/whisper.cpp/build/bin/whisper-cli")
 WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models")
 WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "large-v3-turbo")
+PARAKEET_CLI = os.environ.get("PARAKEET_CLI", "/opt/whisper.cpp/build/bin/parakeet-cli")
 
 # Available models (must be downloaded/quantized in Dockerfile)
-AVAILABLE_MODELS = {"small", "medium", "small.en", "large-v3-turbo", "large-v3-turbo-q8_0"}
+AVAILABLE_MODELS = {
+    "small", "medium", "small.en", "large-v3-turbo", "large-v3-turbo-q8_0",
+    "parakeet-tdt-0.6b-v3-q8_0",
+}
+
+
+def is_parakeet(model_name: str) -> bool:
+    """Parakeet models run through parakeet-cli, not whisper-cli."""
+    return model_name.startswith("parakeet")
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
@@ -197,12 +206,22 @@ def transcribe(
         # Get model path (validates model name)
         model_path = get_model_path(model)
         model_name = model_path.stem.replace("ggml-", "")
-        logger.info(f"Running whisper-cli with model {model_name}")
+        logger.info(f"Running {'parakeet-cli' if is_parakeet(model_name) else 'whisper-cli'} with model {model_name}")
         start_time = time.time()
 
-        # Build whisper-cli command
+        # Build whisper-cli / parakeet-cli command
         json_out_path = None
-        if timestamps:
+        if is_parakeet(model_name):
+            if timestamps:
+                raise ValueError(f"timestamps are not supported for model '{model_name}'")
+            cmd = [
+                PARAKEET_CLI,
+                "-m", str(model_path),
+                "-f", str(audio_path),
+                "-t", "8",      # Threads for CPU-side ops
+                "-np",          # No prints (clean output)
+            ]
+        elif timestamps:
             json_out_path = audio_path.with_suffix("")
             cmd = [
                 WHISPER_CLI,
@@ -235,7 +254,7 @@ def transcribe(
             logger.error(f"whisper-cli failed (exit {result.returncode}): {result.stderr}")
             raise RuntimeError(f"whisper-cli failed: {result.stderr}")
 
-        # Detect language from stderr
+        # Detect language from stderr (whisper only; parakeet doesn't report one)
         language = "unknown"
         for line in result.stderr.split("\n"):
             if "auto-detected language:" in line.lower():

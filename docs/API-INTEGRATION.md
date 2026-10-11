@@ -58,7 +58,7 @@ POST /transcribe?tail=15
 | `debug` | boolean | `false` | Include server-side processing logs in response |
 | `head` | float | `null` | Transcribe only the first N seconds |
 | `tail` | float | `null` | Transcribe only the last N seconds |
-| `model` | string | `large-v3-turbo-q8_0` | Model to use: `small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0` |
+| `model` | string | `large-v3-turbo-q8_0` | Model to use: `small`, `small.en`, `medium`, `large-v3-turbo`, `large-v3-turbo-q8_0`, `parakeet-tdt-0.6b-v3-q8_0` (no `timestamps`) |
 | `timestamps` | boolean | `false` | Return per-segment text with start/end times |
 
 **Note**: `head` and `tail` are mutually exclusive - you cannot specify both.

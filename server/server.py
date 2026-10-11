@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
-from transcriber import transcribe, warmup, list_models, AVAILABLE_MODELS, WHISPER_DEFAULT_MODEL
+from transcriber import transcribe, warmup, list_models, is_parakeet, AVAILABLE_MODELS, WHISPER_DEFAULT_MODEL
 from watchdog import WatchdogService
 from watchdog_config import WatchdogConfig
 from stats import transcriber_stats
@@ -142,7 +142,7 @@ async def transcribe_audio(
     debug: bool = Query(False, description="Include debug logs in response"),
     head: float | None = Query(None, gt=0, description="Transcribe only the first N seconds"),
     tail: float | None = Query(None, gt=0, description="Transcribe only the last N seconds"),
-    model: str | None = Query(None, description="Whisper model to use (small, small.en, medium, large-v3-turbo, large-v3-turbo-q8_0). Default from server config."),
+    model: str | None = Query(None, description="Whisper model to use (small, small.en, medium, large-v3-turbo, large-v3-turbo-q8_0, parakeet-tdt-0.6b-v3-q8_0). Default from server config."),
     timestamps: bool = Query(False, description="Return timed segments [{text, start, end}] in response"),
     audio: UploadFile = File(..., description="Audio file to transcribe"),
 ):
@@ -153,7 +153,7 @@ async def transcribe_audio(
     - debug: bool - Include processing logs in response (default: false)
     - head: float - Transcribe only the first N seconds (mutually exclusive with tail)
     - tail: float - Transcribe only the last N seconds (mutually exclusive with head)
-    - model: str - Whisper model to use: small, small.en, medium, large-v3-turbo, large-v3-turbo-q8_0 (default: from server config)
+    - model: str - Whisper model to use: small, small.en, medium, large-v3-turbo, large-v3-turbo-q8_0, parakeet-tdt-0.6b-v3-q8_0 (default: from server config)
     - timestamps: bool - Return timed segments [{text, start, end}] in response (default: false)
 
     Form Data (required):
@@ -178,6 +178,9 @@ async def transcribe_audio(
             status_code=400,
             detail=f"Model '{model}' not available. Choose from: {', '.join(sorted(AVAILABLE_MODELS))}"
         )
+
+    if model is not None and timestamps and is_parakeet(model.lower()):
+        raise HTTPException(status_code=400, detail="timestamps are not supported for Parakeet models")
 
     # Validate file
     if not audio.filename:
