@@ -12,7 +12,7 @@ from pathlib import Path
 
 WHISPER_CLI = os.environ.get("WHISPER_CLI", "/opt/whisper.cpp/build/bin/whisper-cli")
 WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models")
-WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "large-v3-turbo")
+WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "parakeet-tdt-0.6b-v3-f16")
 PARAKEET_CLI = os.environ.get("PARAKEET_CLI", "/opt/whisper.cpp/build/bin/parakeet-cli")
 
 # Available models (must be downloaded/quantized in Dockerfile)
