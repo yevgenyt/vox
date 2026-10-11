@@ -18,7 +18,7 @@ PARAKEET_CLI = os.environ.get("PARAKEET_CLI", "/opt/whisper.cpp/build/bin/parake
 # Available models (must be downloaded/quantized in Dockerfile)
 AVAILABLE_MODELS = {
     "small", "medium", "small.en", "large-v3-turbo", "large-v3-turbo-q8_0",
-    "parakeet-tdt-0.6b-v3-q8_0",
+    "parakeet-tdt-0.6b-v3-f16", "parakeet-tdt-0.6b-v3-q8_0",
 }
 
 

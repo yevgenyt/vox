@@ -50,10 +50,12 @@ RUN cd /opt/whisper.cpp && \
         models/ggml-large-v3-turbo.bin \
         models/ggml-large-v3-turbo-q8_0.bin q8_0
 
-# Parakeet TDT 0.6B v3 (NVIDIA, multilingual) as an opt-in model via
-# `?model=parakeet-tdt-0.6b-v3-q8_0` and the server default. Official ggml-org
-# conversion; runs through parakeet-cli (built above). ~2x faster than
-# large-v3-turbo-q8_0 on the 890M. Needs timestamps? Falls back to Whisper.
+# Parakeet TDT 0.6B v3 (NVIDIA, multilingual) - the server default, run through
+# parakeet-cli (built above). Official ggml-org conversions. f16 is the default:
+# on a 17-clip A/B it matched q8_0 word for word and was ~8% faster on the 890M.
+# q8_0 stays installed so clients that name it explicitly keep working.
+RUN curl -fL -o /opt/whisper.cpp/models/ggml-parakeet-tdt-0.6b-v3-f16.bin \
+    https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-parakeet-tdt-0.6b-v3-f16.bin
 RUN curl -fL -o /opt/whisper.cpp/models/ggml-parakeet-tdt-0.6b-v3-q8_0.bin \
     https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-parakeet-tdt-0.6b-v3-q8_0.bin
 
@@ -76,7 +78,7 @@ COPY server/ .
 ENV WHISPER_CLI=/opt/whisper.cpp/build/bin/whisper-cli
 ENV PARAKEET_CLI=/opt/whisper.cpp/build/bin/parakeet-cli
 ENV WHISPER_MODEL_DIR=/opt/whisper.cpp/models
-ENV WHISPER_DEFAULT_MODEL=parakeet-tdt-0.6b-v3-q8_0
+ENV WHISPER_DEFAULT_MODEL=parakeet-tdt-0.6b-v3-f16
 
 EXPOSE 5000
 
