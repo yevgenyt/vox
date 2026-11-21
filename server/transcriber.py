@@ -5,6 +5,7 @@ import os
 import struct
 import subprocess
 import tempfile
+import threading
 import json
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ WHISPER_CLI = os.environ.get("WHISPER_CLI", "/opt/whisper.cpp/build/bin/whisper-
 WHISPER_MODEL_DIR = os.environ.get("WHISPER_MODEL_DIR", "/opt/whisper.cpp/models")
 WHISPER_DEFAULT_MODEL = os.environ.get("WHISPER_DEFAULT_MODEL", "parakeet-tdt-0.6b-v3-f16")
 PARAKEET_CLI = os.environ.get("PARAKEET_CLI", "/opt/whisper.cpp/build/bin/parakeet-cli")
+PARAKEET_WORKER = os.environ.get("PARAKEET_WORKER", "/opt/whisper.cpp/build/bin/parakeet-worker")
 
 # Available models (must be downloaded/quantized in Dockerfile)
 AVAILABLE_MODELS = {
@@ -51,6 +53,87 @@ def guess_language_from_script(text: str) -> str:
     if cyrillic == latin:
         return "unknown"
     return "ru" if cyrillic > latin else "en"
+
+
+class ParakeetWorker:
+    """Keeps one parakeet-worker process (and its loaded model) alive.
+
+    parakeet-cli reloads the model on every run, which costs ~1 s normally but
+    ~18 s when other processes have bloated the iGPU's VRAM. The worker loads it
+    once; requests are one audio path per stdin line, answered by one stdout
+    line ("OK\ttext" / "ERR\tmsg"). Only one model stays resident: asking for
+    another model replaces it. Falls back to parakeet-cli if the worker binary
+    is missing.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._proc: subprocess.Popen | None = None
+        self._model_path: str | None = None
+
+    def _stop(self):
+        if self._proc is not None:
+            self._proc.kill()
+            self._proc.wait()
+        self._proc = None
+        self._model_path = None
+
+    def _start(self, model_path: str, timeout: float):
+        self._stop()
+        proc = subprocess.Popen(
+            [PARAKEET_WORKER, "-m", model_path, "-t", "8"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            encoding="utf-8", errors="replace", bufsize=1,
+        )
+        self._proc, self._model_path = proc, model_path
+        try:
+            line = self._readline(timeout)  # blocks until the model is loaded
+        except RuntimeError:
+            self._stop()
+            raise
+        if line != "READY":
+            self._stop()
+            raise RuntimeError(f"parakeet-worker failed to start: {line}")
+
+    def _readline(self, timeout: float) -> str:
+        # A timer kills the process, which unblocks readline() with EOF.
+        timer = threading.Timer(timeout, self._proc.kill)
+        timer.start()
+        try:
+            line = self._proc.stdout.readline()
+        finally:
+            timer.cancel()
+        if not line.endswith("\n"):  # EOF, or a line cut off by a crash
+            raise RuntimeError("parakeet-worker died or timed out")
+        return line[:-1]
+
+    def _send(self, audio_path: str):
+        self._proc.stdin.write(audio_path + "\n")
+        self._proc.stdin.flush()
+
+    def transcribe(self, model_path: str, audio_path: str, timeout: float = 600) -> str:
+        with self._lock:
+            if self._proc is None or self._proc.poll() is not None or self._model_path != model_path:
+                self._start(model_path, timeout=120)
+            try:
+                self._send(audio_path)
+            except OSError:
+                # Died while idle: nothing was processed, so one restart is safe.
+                self._start(model_path, timeout=120)
+                self._send(audio_path)
+            # Past this point the worker may have chewed on the file, so a death
+            # or timeout fails the request instead of re-running it.
+            try:
+                status, _, text = self._readline(timeout).partition("\t")
+            except RuntimeError:
+                self._stop()
+                raise
+            if status != "OK":
+                raise RuntimeError(f"parakeet-worker: {text}")
+            return text.strip()
+
+
+_parakeet_worker = ParakeetWorker()
 
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
@@ -237,7 +320,7 @@ def transcribe(
         # Get model path (validates model name)
         model_path = get_model_path(model)
         model_name = model_path.stem.replace("ggml-", "")
-        logger.info(f"Running {'parakeet-cli' if is_parakeet(model_name) else 'whisper-cli'} with model {model_name}")
+        logger.info(f"Running {'parakeet' if is_parakeet(model_name) else 'whisper-cli'} with model {model_name}")
         start_time = time.time()
 
         # Build whisper-cli / parakeet-cli command
@@ -278,7 +361,11 @@ def transcribe(
                 "-np",          # No prints (clean output)
             ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if is_parakeet(model_name) and os.path.exists(PARAKEET_WORKER):
+            text = _parakeet_worker.transcribe(str(model_path), str(audio_path))
+            result = subprocess.CompletedProcess(cmd, 0, stdout=text, stderr="")
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         duration_ms = int((time.time() - start_time) * 1000)
 
         if result.returncode != 0:
@@ -428,7 +515,15 @@ def warmup(logger: logging.Logger = None, model: str | None = None) -> dict:
                 "-nt",
                 "-np",
             ]
-        result = subprocess.run(warm_cmd, capture_output=True, text=True, timeout=120)
+        if is_parakeet(model_name) and os.path.exists(PARAKEET_WORKER):
+            try:
+                _parakeet_worker.transcribe(str(model_path), str(tmp_path), timeout=120)
+            except (RuntimeError, OSError) as e:
+                logger.error(f"Warm-up failed: {e}")
+                return {"success": False, "duration_ms": int((time.time() - start_time) * 1000), "model": model_name, "error": str(e)}
+            result = subprocess.CompletedProcess(warm_cmd, 0, stdout="", stderr="")
+        else:
+            result = subprocess.run(warm_cmd, capture_output=True, text=True, timeout=120)
 
         duration_ms = int((time.time() - start_time) * 1000)
 

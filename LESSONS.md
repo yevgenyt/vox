@@ -64,6 +64,15 @@ Use **percentile-based** method (20th/80th) not mean-based:
 
 ---
 
+## Slow transcriptions: check model-load time first
+
+**Symptom**: hotkey pastes arrive ~17 s late; client looks stuck "recording/transcribing".
+**Cause seen 2026-11-21**: `parakeet-cli` load time jumped from ~1 s to ~18 s (almost all kernel/sys time) because a Firefox `RDD` helper had bloated the shared iGPU's VRAM (12.8 of 16 GB used). Inference itself was 0.2 s.
+**Diagnose**: run `parakeet-cli` by hand and read `load time` in the timings; compare `mem_info_vram_used` under `/sys/class/drm/card*/device/`; per-process via `/proc/<pid>/fdinfo/*` (`drm-memory-vram`).
+**Fix**: kill the leaking process (`pkill -f 'contentproc.*-parentBuildID'` or restart Firefox). The server now keeps the model resident (`parakeet-worker`), so only a worker (re)start pays the load.
+
+---
+
 ## Container (Podman)
 
 ### GPU passthrough

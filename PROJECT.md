@@ -26,7 +26,7 @@ A containerized transcription service that accepts audio and returns text, with 
 ### Server (Docker)
 - **API**: FastAPI with single `/transcribe` endpoint
 - **Transcription**: whisper.cpp v1.9.5 with Vulkan GPU acceleration
-- **Model**: ggml-parakeet-tdt-0.6b-v3-f16.bin (NVIDIA Parakeet TDT 0.6B v3, multilingual, auto-detects language, no language override) via `parakeet-cli` — default since 2026-10-11 (f16 since the same day; q8_0 stays installed, identical output on a 17-clip A/B, f16 ~8% faster). Whisper `large-v3-turbo-q8_0` stays available (~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss) and is used automatically when `timestamps=true` is requested without a `model`; f16 stays available via `?model=large-v3-turbo`
+- **Model**: ggml-parakeet-tdt-0.6b-v3-f16.bin (NVIDIA Parakeet TDT 0.6B v3, multilingual, auto-detects language, no language override) via a resident `parakeet-worker` (model stays loaded; `parakeet-cli` is the fallback) — default since 2026-10-11 (f16 since the same day; q8_0 stays installed, identical output on a 17-clip A/B, f16 ~8% faster). Whisper `large-v3-turbo-q8_0` stays available (~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss) and is used automatically when `timestamps=true` is requested without a `model`; f16 stays available via `?model=large-v3-turbo`
 
 ### Client (Lightweight Python)
 - **Hotkey**: Left Alt + Right Alt (evdev)
@@ -187,10 +187,11 @@ vox/
 │   └── API-INTEGRATION.md  # External client integration guide
 ├── docker/
 │   ├── Dockerfile          # whisper.cpp + FastAPI + Vulkan
+│   ├── parakeet-worker.cpp # resident Parakeet process (model loaded once)
 │   └── docker-compose.yml  # Podman/Docker compose with GPU passthrough
 ├── server/
 │   ├── server.py           # FastAPI application
-│   ├── transcriber.py      # whisper.cpp wrapper
+│   ├── transcriber.py      # whisper.cpp wrapper + resident Parakeet worker manager
 │   └── requirements.txt    # FastAPI, python-multipart
 ├── client/
 │   ├── client.py           # Hotkey + record + send + paste
@@ -327,3 +328,4 @@ services:
 24. [x] HomeAttendant n8n workflow (liam, node "Vox Transcribe") pinned to `parakeet-tdt-0.6b-v3-f16`; server built-in fallback default aligned with the Dockerfile ENV (2026-10-11)
 25. [x] Bump whisper.cpp v1.9.3 -> v1.9.5 (2026-11-21) — v1.9.4 fixes decoder state re-seeding between calls and calls the encoder-begin callback before language auto-detect; v1.9.5 fixes Vulkan flash-attention shared-memory and stale-buffer bugs. Deployed on donkey 2026-11-21
 26. [x] Parakeet results now carry a script-guessed `language` (Cyrillic -> `ru`, Latin -> `en`, otherwise `unknown`) instead of always `unknown` (2026-11-21). Root cause of dots/spaces in apps: the KVoM client types text with `ydotool type`, which drops characters missing from the active keyboard layout, and KVoM only switches to `ru+phonetic` when the server reports `ru`. Mixed-language sentences still use one layout; other Latin-script languages report `en`
+27. [x] Parakeet runs in a resident worker (`docker/parakeet-worker.cpp`, 2026-11-21). `parakeet-cli` reloaded the 1.25 GB model on every request: ~1 s normally but ~18 s (all kernel time in amdgpu memory allocation) when another process had bloated the iGPU's VRAM — a leaking Firefox media-decoder helper held ~10 GB; killing it restored 0.8 s. The worker loads once and answers one audio path per stdin line (`READY` / `OK\ttext` / `ERR\tmsg`); per-request time is now ~0.22 s on the JFK sample. `ParakeetWorker` in `transcriber.py` restarts it if it dies while idle, fails (never re-runs) a request that crashes or times out it, and swaps the resident model when another is requested. Trade-off: ~1.25 GB of VRAM held permanently; growth with long clips unmeasured. Worker ignores `-dev`/`-ng`

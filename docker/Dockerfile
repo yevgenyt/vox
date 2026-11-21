@@ -59,6 +59,15 @@ RUN curl -fL -o /opt/whisper.cpp/models/ggml-parakeet-tdt-0.6b-v3-f16.bin \
 RUN curl -fL -o /opt/whisper.cpp/models/ggml-parakeet-tdt-0.6b-v3-q8_0.bin \
     https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-parakeet-tdt-0.6b-v3-q8_0.bin
 
+# Resident Parakeet worker: parakeet-cli reloads the 1.2 GB model on every run
+# (~1 s normally, ~18 s when another process has bloated the iGPU's VRAM).
+# The worker loads it once and serves paths over stdin; see server/transcriber.py.
+COPY docker/parakeet-worker.cpp /opt/whisper.cpp/examples/parakeet-worker/parakeet-worker.cpp
+RUN cd /opt/whisper.cpp/examples && \
+    sed 's/parakeet-cli/parakeet-worker/g' parakeet-cli/CMakeLists.txt > parakeet-worker/CMakeLists.txt && \
+    sed -i 's/^    add_subdirectory(parakeet-cli)/&\n    add_subdirectory(parakeet-worker)/' CMakeLists.txt && \
+    cd .. && cmake -B build && cmake --build build -j$(nproc) --target parakeet-worker
+
 # Set up Python environment
 WORKDIR /app
 RUN python3 -m venv /app/venv
@@ -77,6 +86,7 @@ COPY server/ .
 # Environment variables for whisper.cpp
 ENV WHISPER_CLI=/opt/whisper.cpp/build/bin/whisper-cli
 ENV PARAKEET_CLI=/opt/whisper.cpp/build/bin/parakeet-cli
+ENV PARAKEET_WORKER=/opt/whisper.cpp/build/bin/parakeet-worker
 ENV WHISPER_MODEL_DIR=/opt/whisper.cpp/models
 ENV WHISPER_DEFAULT_MODEL=parakeet-tdt-0.6b-v3-f16
 

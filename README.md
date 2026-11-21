@@ -136,7 +136,7 @@ Response with logs:
     "10:30:45 INFO Received file: recording.wav",
     "10:30:45 INFO Saved 12345 bytes to /tmp/tmpXXXX.wav",
     "10:30:45 INFO Processing /tmp/tmpXXXX.wav (12345 bytes)",
-    "10:30:45 INFO Running parakeet-cli with model parakeet-tdt-0.6b-v3-f16",
+    "10:30:45 INFO Running parakeet with model parakeet-tdt-0.6b-v3-f16",
     "10:30:46 INFO Transcribed in 850ms, language=en, text_len=12"
   ]
 }
