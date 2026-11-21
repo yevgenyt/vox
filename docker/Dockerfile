@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y \
 
 # Build whisper.cpp with Vulkan
 WORKDIR /opt
-RUN git clone --branch v1.9.3 --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
+RUN git clone --branch v1.9.5 --depth 1 https://github.com/ggerganov/whisper.cpp.git && \
     cd whisper.cpp && \
     cmake -B build -DGGML_VULKAN=1 && \
     cmake --build build -j$(nproc)

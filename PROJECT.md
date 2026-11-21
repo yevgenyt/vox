@@ -25,7 +25,7 @@ A containerized transcription service that accepts audio and returns text, with 
 
 ### Server (Docker)
 - **API**: FastAPI with single `/transcribe` endpoint
-- **Transcription**: whisper.cpp v1.9.3 with Vulkan GPU acceleration
+- **Transcription**: whisper.cpp v1.9.5 with Vulkan GPU acceleration
 - **Model**: ggml-parakeet-tdt-0.6b-v3-f16.bin (NVIDIA Parakeet TDT 0.6B v3, multilingual, auto-detects language, no language override) via `parakeet-cli` — default since 2026-10-11 (f16 since the same day; q8_0 stays installed, identical output on a 17-clip A/B, f16 ~8% faster). Whisper `large-v3-turbo-q8_0` stays available (~22% faster than f16 on the bandwidth-bound Radeon 890M iGPU with no measurable quality loss) and is used automatically when `timestamps=true` is requested without a `model`; f16 stays available via `?model=large-v3-turbo`
 
 ### Client (Lightweight Python)
@@ -325,3 +325,4 @@ services:
 22. [x] Parakeet is the server default (2026-10-11). `timestamps=true` with no `model` falls back to `large-v3-turbo-q8_0`; explicit Parakeet + `timestamps=true` is a 400. Known issue: very short (<3 s) English clips can come out as Cyrillic transliteration ("Ласт экзекьюшен.") because v3 auto-detects language with no override; options are the English-only v2 (needs conversion) or forcing a Whisper model
 23. [x] Parakeet default moved q8_0 -> f16 (2026-10-11). 17-clip A/B: transcripts identical, f16 median 0.78s vs 0.85s. q8_0 remains installed because the HomeAttendant n8n workflow and older Vox clients name it explicitly
 24. [x] HomeAttendant n8n workflow (liam, node "Vox Transcribe") pinned to `parakeet-tdt-0.6b-v3-f16`; server built-in fallback default aligned with the Dockerfile ENV (2026-10-11)
+25. [ ] Bump whisper.cpp v1.9.3 -> v1.9.5 (2026-11-21) — v1.9.4 fixes decoder state re-seeding between calls and calls the encoder-begin callback before language auto-detect; v1.9.5 fixes Vulkan flash-attention shared-memory and stale-buffer bugs. Investigating intermittent ". " output; mark done once deployed on donkey and verified
