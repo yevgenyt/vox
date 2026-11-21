@@ -1,5 +1,6 @@
 """FastAPI server for voice transcription."""
 
+import re
 import logging
 import tempfile
 from contextvars import ContextVar
@@ -195,7 +196,11 @@ async def transcribe_audio(
         logger.info(f"Segment: tail={tail}s")
 
     # Save uploaded file to temp location
-    suffix = Path(audio.filename).suffix or ".wav"
+    # The filename is client-controlled and ends up in the temp path (and on the
+    # worker's line-based stdin), so only accept a plain short extension.
+    suffix = Path(audio.filename).suffix
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", suffix):
+        suffix = ".wav"
 
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp_path = Path(tmp.name)

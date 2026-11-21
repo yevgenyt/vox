@@ -108,6 +108,10 @@ class ParakeetWorker:
         return line[:-1]
 
     def _send(self, audio_path: str):
+        # The protocol is one path per line: a newline in the path would inject
+        # a second request and desync every later reply.
+        if "\n" in audio_path or "\r" in audio_path:
+            raise ValueError("audio path contains a newline")
         self._proc.stdin.write(audio_path + "\n")
         self._proc.stdin.flush()
 
