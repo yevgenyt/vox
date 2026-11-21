@@ -31,6 +31,27 @@ def is_parakeet(model_name: str) -> bool:
     """Parakeet models run through parakeet-cli, not whisper-cli."""
     return model_name.startswith("parakeet")
 
+
+def guess_language_from_script(text: str) -> str:
+    """Approximate the spoken language from the script of the text.
+
+    Parakeet reports no language, but clients (e.g. KVoM) use it to switch the
+    keyboard layout before typing, and without the right layout Cyrillic
+    characters are silently dropped. Cyrillic maps to "ru" and Latin to "en";
+    whichever script has more letters wins. "unknown" when there are no letters.
+    """
+    cyrillic = latin = 0
+    for ch in text:
+        if not ch.isalpha():
+            continue
+        if "\u0400" <= ch <= "\u052f":
+            cyrillic += 1
+        elif ch.isascii() or "\u00c0" <= ch <= "\u024f":
+            latin += 1
+    if cyrillic == latin:
+        return "unknown"
+    return "ru" if cyrillic > latin else "en"
+
 # Fallback logger (no-op if none provided)
 _null_logger = logging.getLogger("null")
 _null_logger.addHandler(logging.NullHandler())
@@ -300,6 +321,9 @@ def transcribe(
                 json_file.unlink(missing_ok=True)
         else:
             text = result.stdout.strip()
+
+        if language == "unknown" and is_parakeet(model_name):
+            language = guess_language_from_script(text)
 
         logger.info(f"Transcribed in {duration_ms}ms, model={model_name}, language={language}, text_len={len(text)}")
         logger.debug(f"whisper stderr: {result.stderr[:500]}" if result.stderr else "whisper stderr: (empty)")
